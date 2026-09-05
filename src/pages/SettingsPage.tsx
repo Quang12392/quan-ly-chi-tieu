@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { Category } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { CategoryManagerModal } from '../components/categories/CategoryManagerModal';
+import { APP_VERSION } from '../version';
 import { 
   Download, 
   Upload, 
@@ -438,7 +439,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* App Info */}
       <div className="text-center py-3 text-xs text-slate-400 space-y-1">
-        <p className="font-semibold text-slate-500">Sổ Chi Tiêu Gia Đình v2.0.0</p>
+        <p className="font-semibold text-slate-500">Sổ Chi Tiêu Gia Đình {APP_VERSION}</p>
         <div className="flex items-center justify-center gap-1">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
           <span>100% Miễn phí trọn đời • Dữ liệu hoàn toàn riêng tư</span>

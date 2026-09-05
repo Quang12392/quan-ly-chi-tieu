@@ -242,7 +242,15 @@ G:\Quản lý chi tiêu gia đình/
 
 ## 6. QUY TRÌNH PHÁT TRIỂN & CẬP NHẬT LÊN WEB
 
-Bất kỳ thay đổi nào về giao diện hoặc tính năng, bạn thực hiện theo 3 bước sau:
+> [!IMPORTANT]
+> ### ⚠️ QUY TẮC BẮT BUỘC: TĂNG SỐ PHIÊN BẢN (VERSION BUMP)
+> **Mỗi khi có bất kỳ chỉnh sửa, sửa lỗi hay thêm tính năng nào cho dự án, BẮT BUỘC PHẢI TĂNG SỐ PHIÊN BẢN:**
+> 1. Mở file [`src/version.ts`](file:///G:/Quản%20lý%20chi%20tiêu%20gia%20đình/src/version.ts), tăng số phiên bản (ví dụ: `v2.0.1` ➔ `v2.0.2` hoặc `v2.1.0`).
+> 2. Cập nhật trường `"version"` tương ứng trong [`package.json`](file:///G:/Quản%20lý%20chi%20tiêu%20gia%20đình/package.json).
+> 
+> Dòng chữ ở chân trang Cài đặt (`Sổ Chi Tiêu Gia Đình v...`) sẽ tự động đọc từ file này để hiển thị. Điều này giúp người dùng dễ dàng kiểm tra trên điện thoại/máy tính xem thiết bị đã nhận được bản cập nhật mới nhất hay chưa!
+
+Bất kỳ thay đổi nào về giao diện hoặc tính năng, bạn thực hiện theo các bước sau:
 
 ### Bước 1: Khởi chạy môi trường thử nghiệm ở máy
 ```bash
