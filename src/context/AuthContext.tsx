@@ -12,7 +12,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = 'family_auth_session';
 const PIN_STORAGE_KEY = 'family_access_pin';
-const DEFAULT_PIN = '123456'; // Default family PIN
+const DEFAULT_PIN = '192394'; // Family master PIN
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<'husband' | 'wife' | null>(() => {
@@ -20,8 +20,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    // Ensure default pin exists
-    if (!localStorage.getItem(PIN_STORAGE_KEY)) {
+    const existingPin = localStorage.getItem(PIN_STORAGE_KEY);
+    // Tự động nâng cấp mã PIN mặc định cũ (123456) lên mã PIN mới của gia đình
+    if (!existingPin || existingPin === '123456') {
       localStorage.setItem(PIN_STORAGE_KEY, DEFAULT_PIN);
     }
   }, []);
