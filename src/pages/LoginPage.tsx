@@ -24,7 +24,7 @@ export const LoginPage: React.FC = () => {
     if (success) {
       navigate('/');
     } else {
-      setError('Mã PIN không đúng. Mã mặc định là 123456');
+      setError('Mã PIN bảo mật không chính xác. Vui lòng thử lại.');
     }
   };
 
@@ -91,14 +91,9 @@ export const LoginPage: React.FC = () => {
 
           {/* Family PIN input */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-slate-600">
-                Mã PIN gia đình
-              </label>
-              <span className="text-[10px] text-slate-400">
-                (Mặc định: 123456)
-              </span>
-            </div>
+            <label className="text-xs font-semibold text-slate-600">
+              Mã PIN gia đình
+            </label>
             <div className="relative">
               <input
                 type="password"
