@@ -1,0 +1,18 @@
+{
+  "name": "Sổ Chi Tiêu Gia Đình",
+  "short_name": "Sổ Chi Tiêu",
+  "description": "Ứng dụng quản lý thu chi tài chính dành riêng cho 2 vợ chồng",
+  "start_url": "/#/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
