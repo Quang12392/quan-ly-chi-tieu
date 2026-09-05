@@ -1,130 +1,131 @@
-# SỔ CHI TIÊU GIA ĐÌNH (Family Expense Manager)
+# SỔ CHI TIÊU GIA ĐÌNH (Family Expense Manager) v2.0
 
-Ứng dụng web quản lý thu chi tài chính gia đình được thiết kế tối giản, trực quan, bảo mật và dành riêng cho **2 vợ chồng**.
+Ứng dụng web PWA quản lý tài chính - chi tiêu gia đình dành riêng cho **2 vợ chồng**, tối giản, bảo mật, hoạt động trọn đời với chi phí **0 đồng/tháng**.
 
-- **Chi phí vận hành:** **0 đồng / tháng** trọn đời.
-- **Quyền riêng tư tuyệt đối:** Dữ liệu lưu trữ trên Google Sheets cá nhân của bạn, không chia sẻ cho bên thứ ba.
-- **Tốc độ:** Nhập giao dịch chỉ mất **vài giây** với các nút gợi ý tiền nhanh (+20k, +50k, +100k, +500k, +1tr).
-- **Trải nghiệm ứng dụng di động (PWA):** Tối ưu giao diện Mobile-first, cài đặt lên màn hình chính điện thoại như ứng dụng native.
-
----
-
-## 1. Tính Năng Nổi Bật
-
-1. **Tổng Quan Thu Chi (Dashboard):**
-   - Xem nhanh: Số dư còn lại, Tổng thu, Tổng chi và Tỷ lệ tiết kiệm (% thu nhập giữ lại được) trong tháng.
-   - Thống kê chi tiêu giữa 2 vợ chồng: Chồng chi bao nhiêu (%), Vợ chi bao nhiêu (%).
-   - Tiến độ ngân sách tháng với 3 mức cảnh báo màu sắc: Xanh (<80%), Vàng (80-99%), Đỏ (>=100%).
-   - Top 5 danh mục chi nhiều nhất và danh sách giao dịch gần đây (cho phép bấm vào để sửa/xóa trực tiếp).
-2. **Quản Lý Giao Dịch Toàn Diện (Transactions MVP):**
-   - Thêm khoản Thu / Chi siêu nhanh với bàn phím số tự động và ghi nhớ người thực hiện.
-   - Chỉnh sửa và xóa giao dịch an toàn (hộp thoại xác nhận, xóa mềm `deleted = true`).
-   - Gom nhóm danh sách theo từng ngày kèm tổng tiền chi trong ngày.
-   - Bộ lọc đa chiều: Lọc theo tháng, theo Thu/Chi, theo người chi (`Cả 2 vợ chồng`, `Chồng`, `Vợ`), lọc theo danh mục cụ thể và tìm kiếm ghi chú theo thời gian thực.
-3. **Quản Lý Danh Mục (Categories):**
-   - Phân loại danh mục Thu và Chi riêng biệt.
-   - Thêm danh mục mới, đổi tên hoặc ẩn danh mục không còn sử dụng.
-4. **Báo Cáo & So Sánh (Reports):**
-   - So sánh trực tiếp Thu/Chi tháng này với tháng trước (chênh lệch số tiền VNĐ và tỷ lệ %).
-   - Biểu đồ cột đôi xu hướng 6 tháng gần nhất (Thu nhập vs Chi tiêu) bằng vector SVG siêu nhẹ.
-   - Biểu đồ phân bổ tỷ trọng chi tiêu đa màu sắc.
-5. **Định Mức Ngân Sách (Budgets):**
-   - Đặt hạn mức chi tiêu hàng tháng cho từng danh mục (Ăn uống, Con cái, Mua sắm...).
-   - Theo dõi phần trăm đã tiêu và số tiền còn lại được phép chi tiêu.
-6. **Bảo Mật Gia Đình (Security & PIN):**
-   - Màn hình đăng nhập dành riêng cho 2 người, không có chức năng đăng ký công khai.
-   - Khóa bằng mã PIN gia đình (Mã mặc định: `123456`, có thể đổi bất cứ lúc nào trong mục Cài đặt).
-   - Chọn vai trò khi sử dụng: `Chồng` hoặc `Vợ`.
-7. **Sao Lưu & Xuất Dữ Liệu (Backup & Restore):**
-   - **Xuất file Excel (CSV):** Xuất toàn bộ lịch sử giao dịch chuẩn UTF-8 BOM (mở trực tiếp bằng Microsoft Excel không bao giờ bị lỗi font tiếng Việt).
-   - **Sao lưu JSON:** Tải bản sao lưu toàn diện (giao dịch, danh mục, ngân sách, cài đặt).
-   - **Khôi phục dữ liệu:** Cho phép upload file JSON để phục hồi dữ liệu khi chuyển thiết bị.
+- **Website hoạt động 24/7:** [https://quang12392.github.io/quan-ly-chi-tieu/](https://quang12392.github.io/quan-ly-chi-tieu/)
+- **GitHub Repository:** [https://github.com/Quang12392/quan-ly-chi-tieu](https://github.com/Quang12392/quan-ly-chi-tieu)
+- **Mã PIN bảo mật gia đình:** `192394`
+- **Tài khoản mặc định:** `Chồng` và `Vợ`
+- **Cơ sở dữ liệu đám mây:** Google Sheets riêng tư (đồng bộ tự động qua Google Apps Script Web App)
 
 ---
 
-## 2. Công Nghệ Sử Dụng (Tech Stack)
+## 1. TÀI LIỆU CẦN ĐỌC KHI MUỐN CHỈNH SỬA DỰ ÁN
 
-- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, React Router (`HashRouter` chống lỗi 404 khi tải lại trang hoặc dùng PWA).
-- **Backend API:** Google Apps Script Web App (chạy trực tiếp trên hạ tầng Google, `LockService` chống ghi đè khi 2 người cùng nhập đồng thời).
-- **Database:** Google Sheets (`Transactions`, `Categories`, `Members`, `Accounts`, `Budgets`, `Settings`).
+Khi bạn hoặc bất kỳ AI / Lập trình viên nào muốn tiếp tục chỉnh sửa dự án này, chỉ cần đọc **2 file cốt lõi** sau:
+
+1. 📄 **`README.md` (Chính là file này)**:
+   - **Mục đích:** Hướng dẫn nhanh, tổng quan kiến trúc, thông tin đăng nhập, luồng triển khai và quy trình cập nhật mới nhất của dự án.
+2. 📘 **`FAMILY_EXPENSE_APP_SPEC.md`**:
+   - **Mục đích:** Bản đặc tả chi tiết toàn diện (1500 dòng) về toàn bộ logic nghiệp vụ, cấu trúc bảng tính Google Sheets (schema 6 bảng), quy tắc tính toán tài chính, API contracts và các kịch bản kiểm thử.
 
 ---
 
-## 3. Khởi Chạy Local Để Sử Dụng Ngay
+## 2. CẤU TRÚC THƯ MỤC DỰ ÁN
 
-Ứng dụng có sẵn **Chế độ Nội bộ (Offline / LocalStorage)** với đầy đủ dữ liệu mẫu và tính năng để bạn dùng ngay:
-
-```bash
-# Cài đặt thư viện
-npm install
-
-# Khởi chạy ứng dụng
-npm run dev
+```
+G:\Quản lý chi tiêu gia đình/
+├── .github/workflows/
+│   └── deploy.yml              # Tự động build và deploy lên GitHub Pages khi push code
+├── apps-script/                # Mã nguồn Backend Google Apps Script
+│   ├── Code_AllInOne.gs        # ⭐ File gộp toàn bộ backend (chỉ cần copy 1 file này dán vào Apps Script)
+│   ├── Code.gs                 # Router doGet/doPost
+│   ├── Setup.gs                # Hàm setupDatabase() tự động tạo 6 Sheet & định dạng
+│   ├── Transactions.gs         # Thêm, sửa, xóa (soft-delete), phân trang giao dịch
+│   ├── Categories.gs           # Lấy và cập nhật danh mục thu/chi
+│   ├── Budgets.gs              # Quản lý & tự động kế thừa ngân sách hàng tháng
+│   ├── Dashboard.gs            # Tổng hợp số liệu Dashboard, so sánh Chồng/Vợ, cảnh báo ngân sách
+│   └── Utils.gs                # Hàm tiện ích (UUID, JSON response, map tiêu đề cột)
+├── public/                     # Tài nguyên tĩnh & PWA
+│   ├── apple-touch-icon.png    # Icon 3D cho màn hình chính iPhone (180x180)
+│   ├── icon-192.png            # Icon 3D cho màn hình chính Android (192x192)
+│   ├── icon-512.png            # Icon 3D splash screen Android (512x512)
+│   ├── favicon.png             # Favicon trình duyệt
+│   ├── manifest.json           # Khai báo cấu hình PWA Web App
+│   └── sw.js                   # Service Worker hỗ trợ cài đặt PWA và cập nhật cache
+├── src/                        # Mã nguồn Frontend (React + TypeScript + Tailwind CSS)
+│   ├── api/
+│   │   ├── client.ts           # ApiClient 2 chế độ: LocalStorage (Offline) & Google Sheets (Online)
+│   │   └── mockData.ts         # Dữ liệu ban đầu (danh mục, tài khoản, số dư mẫu)
+│   ├── components/
+│   │   ├── budgets/            # Modal thiết lập hạn mức ngân sách
+│   │   ├── categories/         # Modal thêm/sửa/ẩn danh mục thu chi
+│   │   ├── layout/             # Header, Bottom Navigation (5 tab), AppLayout
+│   │   └── transactions/       # Modal chỉnh sửa giao dịch trực tiếp
+│   ├── context/
+│   │   └── AuthContext.tsx      # Quản lý phiên đăng nhập, vai trò (Chồng/Vợ), mã PIN gia đình (192394)
+│   ├── pages/
+│   │   ├── DashboardPage.tsx   # Trang Tổng quan (Số dư, Chồng vs Vợ, Hạn mức, Top chi tiêu)
+│   │   ├── TransactionsPage.tsx# Trang Giao dịch (Lọc tháng, lọc người chi, lọc danh mục, tìm kiếm)
+│   │   ├── AddTransactionPage.tsx # Trang Thêm giao dịch (+20k, +50k, +100k, +500k, +1tr)
+│   │   ├── ReportsPage.tsx     # Trang Báo cáo xu hướng 6 tháng & Quản lý ngân sách
+│   │   ├── SettingsPage.tsx    # Trang Cài đặt (Link Google Sheet, đổi mã PIN, xuất CSV/JSON)
+│   │   └── LoginPage.tsx       # Màn hình khóa PIN gia đình
+│   ├── types/                  # Định nghĩa TypeScript (Transaction, Category, Budget, Member...)
+│   └── utils/                  # Hàm format tiền tệ (VND), ngày tháng
+├── index.html                  # File HTML gốc (tích hợp PWA meta tags & viewport chống zoom)
+├── vite.config.ts              # Cấu hình Vite (base: './' chạy mượt trên GitHub Pages)
+└── package.json                # Danh sách thư viện và scripts
 ```
 
-Truy cập: [http://localhost:3000](http://localhost:3000)
-- **Mã PIN đăng nhập mặc định:** `123456`
-- **Chọn:** `Chồng` hoặc `Vợ`
+---
+
+## 3. CÁC TÍNH NĂNG ĐẶC BIỆT ĐÃ NÂNG CẤP
+
+1. **Bảo Mật Bằng Mã PIN Riêng (`192394`):**
+   - Mọi thiết bị mới khi truy cập link bắt buộc phải nhập đúng mã PIN bí mật của gia đình.
+   - Không hiển thị bất kỳ gợi ý mật khẩu nào trên màn hình.
+   - Khi cần đổi mã PIN: Vào tab **Cài đặt** > **Bảo mật & Mã PIN**.
+
+2. **Tự Động Kế Thừa Hạn Mức Ngân Sách (Auto-inherit):**
+   - Thiết lập hạn mức chi tiêu 1 lần (ví dụ tháng 9), thì sang tháng 10, tháng 11, tháng 12... hệ thống sẽ **tự động lấy hạn mức tháng trước áp dụng luôn**.
+   - Người dùng không phải nhập lại mỗi tháng. Khi nào có tháng đặc biệt (tháng Tết, sự kiện) mới cần vào chỉnh sửa riêng cho tháng đó.
+
+3. **Chế Độ Đồng Bộ Kép (Dual-mode):**
+   - **Local Mode:** Nếu chưa dán link Google Sheets, ứng dụng tự động lưu vào LocalStorage máy để dùng thử.
+   - **Cloud Mode:** Khi dán URL Web App Apps Script vào Cài đặt, toàn bộ dữ liệu sẽ tự động ghi/đọc trực tiếp từ Google Sheets.
+
+4. **Xuất Báo Cáo & Sao Lưu An Toàn:**
+   - Xuất file Excel (CSV) chuẩn UTF-8 BOM tiếng Việt không bị lỗi font.
+   - Tải file sao lưu JSON và khôi phục khi chuyển máy.
 
 ---
 
-## 4. Hướng Dẫn Kết Nối Google Sheets & Deploy Backend (Chỉ 3 phút)
+## 4. QUY TRÌNH CHỈNH SỬA & ĐẨY CẬP NHẬT LÊN WEB
 
-### Bước 1: Tạo Google Spreadsheet mới
-1. Mở [Google Sheets](https://sheets.new) tạo 1 file mới và đặt tên: `Family Finance Database`.
+Khi bạn muốn sửa đổi mã nguồn (giao diện, logic, chức năng):
 
-### Bước 2: Dán mã nguồn Apps Script
-1. Trên menu trang tính, chọn **Tiện ích mở rộng** (Extensions) > **Apps Script**.
-2. Đổi tên dự án thành: `Family Expense API`.
-3. Lần lượt tạo các file script (bấm dấu `+` cạnh mục Trình chỉnh sửa > Script) và copy mã tương ứng từ thư mục `apps-script/`:
-   - `Code.gs` <- `apps-script/Code.gs`
-   - `Setup.gs` <- `apps-script/Setup.gs`
-   - `Transactions.gs` <- `apps-script/Transactions.gs`
-   - `Categories.gs` <- `apps-script/Categories.gs`
-   - `Budgets.gs` <- `apps-script/Budgets.gs`
-   - `Dashboard.gs` <- `apps-script/Dashboard.gs`
-   - `Utils.gs` <- `apps-script/Utils.gs`
+### Bước 1: Mở dự án và kiểm tra ở máy tính
+```bash
+# Mở thư mục dự án
+cd "G:\Quản lý chi tiêu gia đình"
 
-### Bước 3: Chạy khởi tạo Database tự động
-1. Trên thanh công cụ Apps Script, chọn hàm **`setupDatabase`** trong menu dropdown.
-2. Bấm **Chạy (Run)**.
-3. Khi Google hiện hộp thoại cấp quyền: Bấm **Xem lại quyền** > Chọn tài khoản Google của bạn > Bấm **Nâng cao (Advanced)** > Bấm **Đi tới Family Expense API (không an toàn)** > Bấm **Cho phép (Allow)**.
-4. Mở lại Google Sheets: Bạn sẽ thấy tự động tạo đủ **6 Sheet** với định dạng chuẩn đẹp mắt!
+# Chạy server thử nghiệm ở máy
+npm run dev
+```
+Mở trình duyệt xem thử tại: [http://localhost:3000](http://localhost:3000)
 
-### Bước 4: Triển khai Web App (Deploy)
-1. Trong Apps Script, bấm nút **Triển khai (Deploy)** (góc phải trên) > Chọn **Tùy chọn triển khai mới (New deployment)**.
-2. Bấm biểu tượng bánh răng > Chọn **Ứng dụng web (Web app)**:
-   - **Mô tả:** `v1.0`
-   - **Thực thi dưới dạng (Execute as):** `Tôi (Tài khoản của bạn)`
-   - **Người có quyền truy cập (Who has access):** `Bất kỳ ai (Anyone)`
-3. Bấm **Triển khai (Deploy)** và copy **URL ứng dụng web** (dạng `https://script.google.com/macros/s/.../exec`).
+### Bước 2: Kiểm tra bản build trước khi đẩy lên
+```bash
+npm run build
+```
+*(Nếu câu lệnh này báo `✓ built in ...s` là code chuẩn, không có lỗi TypeScript).*
 
-### Bước 5: Kết nối trong ứng dụng
-1. Mở ứng dụng web của bạn > Vào tab **Cài đặt** (⚙️).
-2. Dán URL vừa copy vào ô **Web App URL (Google Apps Script)**.
-3. Bấm **Kiểm tra kết nối**. Khi hiện thông báo màu xanh *"Kết nối thành công!"*, toàn bộ dữ liệu của gia đình bạn sẽ được đồng bộ lên Google Sheets!
+### Bước 3: Đẩy lên GitHub (Tự động cập nhật web trong 30 giây)
+```bash
+git add .
+git commit -m "Mô tả nội dung bạn vừa sửa"
+git push origin main
+```
+Sau khi push, **GitHub Actions** sẽ tự động build và xuất bản lên link web:  
+👉 **`https://quang12392.github.io/quan-ly-chi-tieu/`**
 
 ---
 
-## 5. Đưa Ứng Dụng Lên Mạng Miễn Phí (Vercel / Netlify)
+## 5. NẾU CẦN CẬP NHẬT LẠI MÃ GOOGLE APPS SCRIPT (BACKEND)
 
-Bạn có thể deploy ứng dụng web này miễn phí trọn đời bằng **Vercel** hoặc **Netlify**:
-
-### Cách 1: Đẩy lên GitHub và liên kết với Vercel
-1. Đẩy mã nguồn lên một kho lưu trữ GitHub riêng tư (Private Repository).
-2. Đăng nhập [Vercel](https://vercel.com) > Chọn **Add New Project** > Chọn kho lưu trữ của bạn.
-3. Cài đặt:
-   - **Framework Preset:** Vite
-   - **Build Command:** `npm run build`
-   - **Output Directory:** `dist`
-4. Bấm **Deploy**. Sau 1 phút, bạn sẽ có một đường link web riêng (ví dụ: `https://chi-tieu-gia-dinh.vercel.app`).
-
----
-
-## 6. Cài Đặt Lên Điện Thoại Như App Native (PWA)
-
-Ứng dụng đã được cấu hình sẵn chuẩn PWA với icon và theme sắc nét:
-- **Trên iPhone (Safari):** Truy cập đường link web của bạn > Bấm biểu tượng **Chia sẻ (Share - hình vuông có mũi tên lên)** > Chọn **Thêm vào màn hình chính (Add to Home Screen)**.
-- **Trên Android (Chrome):** Truy cập đường link web của bạn > Bấm menu **3 chấm** ở góc trên > Chọn **Cài đặt ứng dụng** hoặc **Thêm vào màn hình chính (Add to Home Screen)**.
-
-Ứng dụng sẽ xuất hiện trên màn hình điện thoại với biểu tượng riêng, mở toàn màn hình (không có thanh địa chỉ trình duyệt) như một ứng dụng app cài sẵn từ App Store!
+Nếu có sửa đổi liên quan đến cách tính toán trong Google Sheets:
+1. Mở file [apps-script/Code_AllInOne.gs](file:///G:/Quản%20lý%20chi%20tiêu%20gia%20đình/apps-script/Code_AllInOne.gs) > Copy toàn bộ code (`Ctrl + A` > `Ctrl + C`).
+2. Mở Google Sheet của bạn > **Tiện ích mở rộng** > **Apps Script**.
+3. Dán đè vào file `Code.gs` và nhấn **Lưu** (`Ctrl + S`).
+4. Bấm **Triển khai (Deploy)** > **Quản lý bản triển khai (Manage deployments)** > bấm biểu tượng **Cây bút chì** (Chỉnh sửa) > chọn Phiên bản: **Phiên bản mới (New version)** > bấm **Triển khai**.
