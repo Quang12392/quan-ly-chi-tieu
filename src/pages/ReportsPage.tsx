@@ -16,7 +16,8 @@ import {
   AlertCircle, 
   CheckCircle2,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Sparkles
 } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
@@ -365,6 +366,15 @@ export const ReportsPage: React.FC = () => {
                     {budgets.length} danh mục đã đặt
                   </span>
                 </div>
+
+                {budgets[0]?.inherited_from && (
+                  <div className="flex items-center gap-2 p-2.5 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl text-emerald-800 text-xs">
+                    <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>
+                      Tự động kế thừa hạn mức từ <strong>tháng {budgets[0].inherited_from}</strong>. Bấm nút thiết lập ở trên nếu muốn chỉnh sửa riêng cho tháng này.
+                    </span>
+                  </div>
+                )}
 
                 {budgets.length === 0 ? (
                   <div className="text-center py-8 space-y-2">

@@ -526,9 +526,32 @@ function handleGetBudgets(payload) {
   const year = Number(payload.year);
   const month = Number(payload.month);
 
-  const filtered = list.filter(b => {
-    return (!year || Number(b.year) === year) && (!month || Number(b.month) === month);
-  });
+  if (!year || !month) {
+    return successResponse(list);
+  }
+
+  let filtered = list.filter(b => Number(b.year) === year && Number(b.month) === month);
+
+  // Tự động kế thừa hạn mức từ tháng gần nhất trước đó nếu tháng này chưa đặt
+  if (filtered.length === 0 && list.length > 0) {
+    const pastBudgets = list
+      .filter(b => (Number(b.year) < year) || (Number(b.year) === year && Number(b.month) < month))
+      .sort((a, b) => (Number(b.year) - Number(a.year)) || (Number(b.month) - Number(a.month)));
+
+    if (pastBudgets.length > 0) {
+      const latestY = Number(pastBudgets[0].year);
+      const latestM = Number(pastBudgets[0].month);
+      filtered = pastBudgets
+        .filter(b => Number(b.year) === latestY && Number(b.month) === latestM)
+        .map(b => ({
+          ...b,
+          id: 'b_' + year + '_' + month + '_' + b.category_id,
+          year: year,
+          month: month,
+          inherited_from: latestM + '/' + latestY
+        }));
+    }
+  }
 
   return successResponse(filtered);
 }
@@ -732,7 +755,18 @@ function handleGetDashboardSummary(payload) {
     }
   ];
 
-  const monthBudgets = budgets.filter(b => Number(b.year) === year && Number(b.month) === month);
+  // Budget summary - tự động kế thừa hạn mức tháng gần nhất nếu tháng này chưa đặt
+  let monthBudgets = budgets.filter(b => Number(b.year) === year && Number(b.month) === month);
+  if (monthBudgets.length === 0 && budgets.length > 0) {
+    const pastBudgets = budgets
+      .filter(b => (Number(b.year) < year) || (Number(b.year) === year && Number(b.month) < month))
+      .sort((a, b) => (Number(b.year) - Number(a.year)) || (Number(b.month) - Number(a.month)));
+    if (pastBudgets.length > 0) {
+      const latestY = Number(pastBudgets[0].year);
+      const latestM = Number(pastBudgets[0].month);
+      monthBudgets = pastBudgets.filter(b => Number(b.year) === latestY && Number(b.month) === latestM);
+    }
+  }
   let total_budget = 0;
   monthBudgets.forEach(b => { total_budget += Number(b.amount) || 0; });
   const budget_summary = {

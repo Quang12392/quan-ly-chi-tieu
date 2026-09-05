@@ -140,8 +140,18 @@ function handleGetDashboardSummary(payload) {
     }
   ];
 
-  // Budget summary
-  const monthBudgets = budgets.filter(b => Number(b.year) === year && Number(b.month) === month);
+  // Budget summary - tự động kế thừa hạn mức tháng gần nhất nếu tháng này chưa đặt
+  let monthBudgets = budgets.filter(b => Number(b.year) === year && Number(b.month) === month);
+  if (monthBudgets.length === 0 && budgets.length > 0) {
+    const pastBudgets = budgets
+      .filter(b => (Number(b.year) < year) || (Number(b.year) === year && Number(b.month) < month))
+      .sort((a, b) => (Number(b.year) - Number(a.year)) || (Number(b.month) - Number(a.month)));
+    if (pastBudgets.length > 0) {
+      const latestY = Number(pastBudgets[0].year);
+      const latestM = Number(pastBudgets[0].month);
+      monthBudgets = pastBudgets.filter(b => Number(b.year) === latestY && Number(b.month) === latestM);
+    }
+  }
   let total_budget = 0;
   monthBudgets.forEach(b => { total_budget += Number(b.amount) || 0; });
   const budget_summary = {

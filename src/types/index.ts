@@ -48,6 +48,7 @@ export interface Budget {
   amount: number;
   created_at: string;
   updated_at: string;
+  inherited_from?: string;
 }
 
 export interface AppSettings {
