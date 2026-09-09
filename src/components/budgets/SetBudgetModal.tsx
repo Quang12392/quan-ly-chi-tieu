@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Category, Budget } from '../../types';
 import { api } from '../../api/client';
 import { formatCurrency, formatNumberWithDots, parseCurrencyInput } from '../../utils/formatters';
-import { X, Check, Loader2, Target } from 'lucide-react';
+import { X, Check, Loader2, Target, Trash2 } from 'lucide-react';
 
 interface SetBudgetModalProps {
   isOpen: boolean;
@@ -73,6 +73,7 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     const amount = parseCurrencyInput(amountStr);
 
     if (amount <= 0) {
@@ -93,6 +94,22 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
       onClose();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Lỗi khi lưu ngân sách');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (saving) return;
+    try {
+      setSaving(true);
+      setErrorMsg('');
+      // Keep a zero marker so previous months cannot restore the removed limit.
+      await api.saveBudget({ year, month, category_id: selectedCatId, amount: 0 });
+      onBudgetSaved();
+      onClose();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Lỗi khi xóa ngân sách');
     } finally {
       setSaving(false);
     }
@@ -135,6 +152,7 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
               Chọn danh mục chi tiêu
             </label>
             <select
+              disabled={saving}
               value={selectedCatId}
               onChange={(e) => setSelectedCatId(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
@@ -221,6 +239,22 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
               <span>Lưu ngân sách</span>
             </button>
           </div>
+          {existingBudgets.some((b) => b.category_id === selectedCatId) && (
+            <div className="border-t border-slate-100 pt-3 space-y-1.5">
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={saving}
+                className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xóa ngân sách danh mục
+              </button>
+              <p className="text-[11px] text-slate-500">
+                Ngừng áp dụng từ tháng {month}/{year} và các tháng sau cho đến khi có hạn mức mới. Giữ nguyên danh mục và các giao dịch đã ghi. Bạn có thể đặt lại bằng nút thiết lập ngân sách.
+              </p>
+            </div>
+          )}
         </form>
       </div>
     </div>

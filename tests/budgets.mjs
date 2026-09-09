@@ -26,3 +26,16 @@ for (const resolve of [resolveBudgets, backend.resolveBudgets]) {
 }
 assert.equal(history[0].month, 9);
 console.log('Budget regression checks passed for frontend and Apps Script.');
+
+// Removal must block inheritance, preserve other categories and allow reactivation.
+for (const resolve of [resolveBudgets, backend.resolveBudgets]) {
+  const removed = [...history, budget(2026, 10, 'study', 0)];
+  assert.deepEqual(amounts(resolve(removed, 2026, 9)), { food: 10, study: 10, travel: 2 });
+  assert.deepEqual(amounts(resolve(removed, 2026, 10)), { food: 10, travel: 2 });
+  assert.deepEqual(amounts(resolve(removed, 2027, 1)), { food: 8, travel: 2 });
+  assert.deepEqual(amounts(resolve(removed, 2027, 2)), { food: 8, study: 15, travel: 2 });
+  const inheritedRemoval = [...history, budget(2026, 11, 'travel', 0)];
+  assert.deepEqual(amounts(resolve(inheritedRemoval, 2026, 12)), { food: 8, study: 12 });
+  assert.deepEqual(amounts(resolve([budget(2026, 9, 'food', 10), budget(2026, 10, 'food', 0)], 2026, 11)), {});
+}
+console.log('Removal, inheritance blocking, past months and reactivation checks passed.');

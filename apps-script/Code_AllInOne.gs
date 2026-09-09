@@ -544,7 +544,8 @@ function resolveBudgets(budgets, year, month) {
       latest.set(budget.category_id, budget);
     }
   });
-  return Array.from(latest.values(), budget => ({
+  // Zero marks a disabled budget and must block older inherited limits.
+  return Array.from(latest.values()).filter(budget => Number(budget.amount) > 0).map(budget => ({
     ...budget,
     amount: Number(budget.amount),
     id: 'b_' + year + '_' + month + '_' + budget.category_id,

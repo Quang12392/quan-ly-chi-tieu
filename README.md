@@ -173,6 +173,7 @@ Nhờ đó, khi cả 2 vợ chồng cùng bấm lưu chi tiêu cùng một giây
 - Hạn mức ngân sách được cấu hình theo từng danh mục.
 - **Quy tắc kế thừa theo danh mục:** Mỗi danh mục dùng hạn mức được thiết lập gần nhất, không muộn hơn tháng đang xem. Chỉnh một danh mục không làm mất hạn mức của các danh mục khác.
 - **Khi chỉnh sửa:** Hạn mức mới áp dụng từ tháng được chọn và tiếp tục cho các tháng sau, cho đến tháng có thiết lập mới hơn của chính danh mục đó. Không thay đổi hạn mức của các tháng trước.
+- **Xóa ngân sách danh mục:** Trong hộp thoại chỉnh hạn mức, bấm nút xóa để ngừng áp dụng từ tháng đang chọn cho đến lần thiết lập mới hơn của danh mục đó. Lưu hạn mức 0 làm dấu ngừng kế thừa; không xóa danh mục hay giao dịch. Có thể đặt lại bằng nút thiết lập ngân sách.
 - **Sửa nhanh:** Bấm trực tiếp vào ô ngân sách để mở hộp thoại với đúng danh mục và hạn mức hiện hành.
 - Cả Tổng quan và Báo cáo dùng cùng quy tắc. Frontend lấy lịch sử ngân sách qua API hiện có nên không bắt buộc triển khai lại Apps Script để sử dụng cơ chế này.
 

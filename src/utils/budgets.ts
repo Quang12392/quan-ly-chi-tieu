@@ -11,7 +11,9 @@ export function resolveBudgets(budgets: Budget[], year: number, month: number): 
       latest.set(budget.category_id, budget);
     }
   }
-  return Array.from(latest.values(), (budget) => ({
+  // A zero limit disables this category; filter only after resolving history
+  // so an older positive limit cannot reappear through inheritance.
+  return Array.from(latest.values()).filter((budget) => Number(budget.amount) > 0).map((budget) => ({
     ...budget,
     amount: Number(budget.amount),
     id: `b_${year}_${month}_${budget.category_id}`,
