@@ -249,17 +249,19 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto" tabIndex={0} aria-label="Biểu đồ thu chi từ tháng 1 đến tháng 12, cuộn ngang để xem trên màn hình nhỏ">
-                  <svg viewBox="0 0 1068 250" className="w-full min-w-[960px]" role="img" aria-label="Đường thu màu xanh và đường chi màu hồng, mỗi chấm là một tháng">
-                    <title>Xu hướng thu chi năm {currentYear}</title>
-                    <desc>{yearlyTrend.map((item) => `${item.label}/${item.year}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`).join('; ')}</desc>
+                {[yearlyTrend.slice(0, 6), yearlyTrend.slice(6, 12)].map((half, halfIndex) => (
+                <div key={halfIndex} className="min-w-0 space-y-1">
+                  <p className="text-[11px] font-semibold text-slate-500">{halfIndex === 0 ? 'Tháng 1 – 6' : 'Tháng 7 – 12'}</p>
+                  <svg viewBox="0 0 420 230" className="block w-full h-auto" role="img" aria-label="Đường thu màu xanh và đường chi màu hồng, mỗi chấm là một tháng">
+                    <title>Thu chi tháng {halfIndex === 0 ? '1–6' : '7–12'} năm {currentYear}</title>
+                    <desc>{half.map((item) => `${item.label}/${item.year}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`).join('; ')}</desc>
                     {[40, 75, 110, 145, 180].map((y) => (
-                      <line key={y} x1="50" x2="1018" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 5" />
+                      <line key={y} x1="42" x2="378" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 5" />
                     ))}
                     {(['income', 'expense'] as const).map((series) => (
                       <polyline
                         key={series}
-                        points={yearlyTrend.map((item, index) => `${50 + index * 968 / Math.max(1, yearlyTrend.length - 1)},${180 - item[series] / maxTrendVal * 140}`).join(' ')}
+                        points={half.map((item, index) => `${42 + index * 336 / Math.max(1, half.length - 1)},${180 - item[series] / maxTrendVal * 140}`).join(' ')}
                         fill="none"
                         stroke={series === 'income' ? '#059669' : '#e11d48'}
                         strokeWidth="2.5"
@@ -268,8 +270,8 @@ export const ReportsPage: React.FC = () => {
                         strokeDasharray={series === 'expense' ? '6 3' : undefined}
                       />
                     ))}
-                    {yearlyTrend.map((item, index) => {
-                      const x = 50 + index * 968 / Math.max(1, yearlyTrend.length - 1);
+                    {half.map((item, index) => {
+                      const x = 42 + index * 336 / Math.max(1, half.length - 1);
                       return (
                         <g key={`${item.year}-${item.month}`}>
                           {(['income', 'expense'] as const).map((series) => {
@@ -282,22 +284,22 @@ export const ReportsPage: React.FC = () => {
                                 <circle cx={x} cy={y} r={income ? 5 : 3} fill="white" stroke={color} strokeWidth="2">
                                   <title>{`${item.label}/${item.year} · ${income ? 'Thu' : 'Chi'}: ${formatCurrency(item[series])}`}</title>
                                 </circle>
-                                <text x={x} y={y + (labelAbove ? -13 : 20)} textAnchor="middle" fill={color} fontSize="11" fontWeight="600" stroke="white" strokeWidth="3" paintOrder="stroke">
+                                <text x={x} y={y + (labelAbove ? -13 : 20)} textAnchor="middle" fill={color} fontSize="13" fontWeight="600" stroke="white" strokeWidth="3" paintOrder="stroke">
                                   {formatCompactCurrency(item[series])}
                                 </text>
                               </g>
                             );
                           })}
-                          <text x={x} y="228" textAnchor="middle" fontSize="11" fontWeight="600" fill={item.month === currentMonth && item.year === currentYear ? '#047857' : '#64748b'}>
+                          <text x={x} y="223" textAnchor="middle" fontSize="13" fontWeight="600" fill={item.month === currentMonth && item.year === currentYear ? '#047857' : '#64748b'}>
                             {item.label}
                           </text>
-                          <text x={x} y="243" textAnchor="middle" fontSize="10" fill="#94a3b8">{item.year}</text>
                         </g>
                       );
                     })}
                   </svg>
                 </div>
-                <p className="text-[10px] text-slate-400">Giá trị làm tròn đến nghìn đồng · 22tr325 = 22.325.000đ. Vuốt ngang nếu biểu đồ chưa hiện đủ.</p>
+                ))}
+                <p className="text-[10px] text-slate-400">Giá trị làm tròn đến nghìn đồng · 22tr325 = 22.325.000đ. Hai biểu đồ dùng chung thang đo.</p>
               </div>
 
               {/* Category Breakdown (Donut Bar & List) */}
