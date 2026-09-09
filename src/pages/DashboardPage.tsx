@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { DashboardSummary, Transaction, Category } from '../types';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatTransactionDateTime } from '../utils/formatters';
 import { EditTransactionModal } from '../components/transactions/EditTransactionModal';
 import { 
   TrendingUp, 
@@ -375,7 +375,7 @@ export const DashboardPage: React.FC = () => {
                         {tx.note || getCategoryName(tx.category_id)}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {formatDate(tx.date)} · {getCategoryName(tx.category_id)} ·{' '}
+                        <span title="Ngày giao dịch và giờ tạo giao dịch (giờ Việt Nam)">{formatTransactionDateTime(tx.date, tx.created_at)}</span> · {getCategoryName(tx.category_id)} ·{' '}
                         <span className={tx.member_id === 'husband' ? 'text-blue-600 font-medium' : 'text-pink-600 font-medium'}>
                           {tx.member_id === 'husband' ? 'Chồng' : 'Vợ'}
                         </span>

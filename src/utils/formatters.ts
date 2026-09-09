@@ -54,6 +54,23 @@ export function formatDate(dateStr: string): string {
   return dateStr;
 }
 
+/** Show the selected transaction date with its creation time in Vietnam (24-hour).
+ * Older records without a valid timestamp keep their date-only display.
+ */
+export function formatTransactionDateTime(dateStr: string, createdAt?: string): string {
+  const date = formatDate(dateStr);
+  if (!createdAt) return date;
+  const timestamp = new Date(createdAt);
+  if (Number.isNaN(timestamp.getTime())) return date;
+  const time = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(timestamp);
+  return `${date} ${time}`;
+}
+
 /**
  * Get start and end dates of a month (1-indexed month)
  */
