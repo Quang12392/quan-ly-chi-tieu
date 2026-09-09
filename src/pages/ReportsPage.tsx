@@ -31,7 +31,7 @@ export const ReportsPage: React.FC = () => {
   const [prevSummary, setPrevSummary] = useState<DashboardSummary | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [trend6Months, setTrend6Months] = useState<
+  const [yearlyTrend, setYearlyTrend] = useState<
     { month: number; year: number; label: string; income: number; expense: number; balance: number }[]
   >([]);
 
@@ -56,14 +56,14 @@ export const ReportsPage: React.FC = () => {
         api.getDashboardSummary(prevY, prevM),
         api.getBudgets(currentYear, currentMonth),
         api.getCategories(),
-        api.getMonthlyTrend(currentYear, currentMonth, 6),
+        api.getMonthlyTrend(currentYear, 12, 12),
       ]);
 
       setSummary(curSum);
       setPrevSummary(pSum);
       setBudgets(bList);
       setCategories(catList);
-      setTrend6Months(trendList);
+      setYearlyTrend(trendList);
     } catch (err) {
       console.error('Failed to load reports data', err);
     } finally {
@@ -104,9 +104,9 @@ export const ReportsPage: React.FC = () => {
     ? Math.round((incomeDiff / prevSummary.total_income) * 100)
     : 0;
 
-  // Max value for 6-month trend chart scaling
+  // Max value for annual trend chart scaling
   const maxTrendVal = Math.max(
-    ...trend6Months.map((t) => Math.max(t.income, t.expense)),
+    ...yearlyTrend.map((t) => Math.max(t.income, t.expense)),
     1000000
   );
 
@@ -235,10 +235,10 @@ export const ReportsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* 6-Month Trend Visualizer (SVG Line Chart) */}
+              {/* Annual Trend Visualizer (SVG Line Chart) */}
               <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-800 text-xs">Xu hướng thu chi 6 tháng gần nhất</h3>
+                  <h3 className="font-bold text-slate-800 text-xs">Xu hướng thu chi năm {currentYear}</h3>
                   <div className="flex items-center gap-3 text-[11px]">
                     <span className="flex items-center gap-1 text-slate-600">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Thu
@@ -249,17 +249,17 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto" tabIndex={0} aria-label="Biểu đồ thu chi 6 tháng, cuộn ngang để xem trên màn hình nhỏ">
-                  <svg viewBox="0 0 540 250" className="w-full min-w-[480px]" role="img" aria-label="Đường thu màu xanh và đường chi màu hồng, mỗi chấm là một tháng">
-                    <title>Xu hướng thu chi 6 tháng gần nhất</title>
-                    <desc>{trend6Months.map((item) => `${item.label}/${item.year}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`).join('; ')}</desc>
+                <div className="overflow-x-auto" tabIndex={0} aria-label="Biểu đồ thu chi từ tháng 1 đến tháng 12, cuộn ngang để xem trên màn hình nhỏ">
+                  <svg viewBox="0 0 1068 250" className="w-full min-w-[960px]" role="img" aria-label="Đường thu màu xanh và đường chi màu hồng, mỗi chấm là một tháng">
+                    <title>Xu hướng thu chi năm {currentYear}</title>
+                    <desc>{yearlyTrend.map((item) => `${item.label}/${item.year}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`).join('; ')}</desc>
                     {[40, 75, 110, 145, 180].map((y) => (
-                      <line key={y} x1="50" x2="490" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 5" />
+                      <line key={y} x1="50" x2="1018" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 5" />
                     ))}
                     {(['income', 'expense'] as const).map((series) => (
                       <polyline
                         key={series}
-                        points={trend6Months.map((item, index) => `${50 + index * 440 / Math.max(1, trend6Months.length - 1)},${180 - item[series] / maxTrendVal * 140}`).join(' ')}
+                        points={yearlyTrend.map((item, index) => `${50 + index * 968 / Math.max(1, yearlyTrend.length - 1)},${180 - item[series] / maxTrendVal * 140}`).join(' ')}
                         fill="none"
                         stroke={series === 'income' ? '#059669' : '#e11d48'}
                         strokeWidth="2.5"
@@ -268,8 +268,8 @@ export const ReportsPage: React.FC = () => {
                         strokeDasharray={series === 'expense' ? '6 3' : undefined}
                       />
                     ))}
-                    {trend6Months.map((item, index) => {
-                      const x = 50 + index * 440 / Math.max(1, trend6Months.length - 1);
+                    {yearlyTrend.map((item, index) => {
+                      const x = 50 + index * 968 / Math.max(1, yearlyTrend.length - 1);
                       return (
                         <g key={`${item.year}-${item.month}`}>
                           {(['income', 'expense'] as const).map((series) => {

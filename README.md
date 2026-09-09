@@ -38,7 +38,7 @@ Xây dựng một ứng dụng web quản lý tài chính - chi tiêu gia đình
 - Ghi nhận chi tiêu / thu nhập chỉ trong 3 - 5 giây.
 - Người thực hiện khi mở form thêm giao dịch mặc định theo thành viên đang đăng nhập. Chọn thành viên khác để điền hộ chỉ áp dụng trong lần nhập đó, không lưu thành mặc định cho lần sau.
 - Xem ai là người chi, phân loại chi tiêu theo danh mục.
-- Biểu đồ đường thu/chi 6 tháng: mỗi tháng có chấm và nhãn giá trị làm tròn đến nghìn đồng (22.325.000đ → 22tr325; 384.000đ → 384k).
+- Biểu đồ đường thu/chi cả năm đang chọn (tháng 1 đến tháng 12): mỗi tháng có chấm và nhãn giá trị làm tròn đến nghìn đồng (22.325.000đ → 22tr325; 384.000đ → 384k).
 - Theo dõi số dư, tỷ lệ tiết kiệm và xu hướng thu chi 6 tháng.
 - Thiết lập hạn mức ngân sách thông minh (tự động kế thừa qua từng tháng).
 - Toàn quyền sở hữu dữ liệu trên Google Sheets cá nhân, không lo mất dữ liệu.
