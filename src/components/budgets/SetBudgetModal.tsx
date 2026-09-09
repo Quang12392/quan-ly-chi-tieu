@@ -11,6 +11,7 @@ interface SetBudgetModalProps {
   month: number;
   categories: Category[];
   existingBudgets: Budget[];
+  initialCategoryId?: string;
   onBudgetSaved: () => void;
 }
 
@@ -21,9 +22,9 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
   month,
   categories,
   existingBudgets,
+  initialCategoryId,
   onBudgetSaved,
 }) => {
-  if (!isOpen) return null;
 
   const expenseCategories = categories.filter((c) => c.type === 'expense' && c.active);
   const [selectedCatId, setSelectedCatId] = useState<string>(
@@ -32,6 +33,13 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
   const [amountStr, setAmountStr] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedCatId(initialCategoryId || categories.find((c) => c.type === 'expense' && c.active)?.id || '');
+      setErrorMsg('');
+    }
+  }, [isOpen, initialCategoryId, categories]);
 
   // When selected category changes, pre-fill existing budget if any
   useEffect(() => {
@@ -42,7 +50,7 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
       setAmountStr('');
     }
     setErrorMsg('');
-  }, [selectedCatId, existingBudgets]);
+  }, [selectedCatId, existingBudgets, isOpen]);
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -89,6 +97,8 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
       setSaving(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
@@ -186,6 +196,8 @@ export const SetBudgetModal: React.FC<SetBudgetModalProps> = ({
               ))}
             </div>
           </div>
+
+          <p className="text-[11px] text-slate-500">Hạn mức áp dụng từ tháng này và tự động dùng cho các tháng sau cho đến khi bạn thay đổi.</p>
 
           {/* Buttons */}
           <div className="flex gap-2 pt-2">

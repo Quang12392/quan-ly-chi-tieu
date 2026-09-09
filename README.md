@@ -171,11 +171,10 @@ Nhờ đó, khi cả 2 vợ chồng cùng bấm lưu chi tiêu cùng một giây
 
 ### 4.2 Tính năng Tự Động Kế Thừa Hạn Mức Ngân Sách (Auto-Inherit)
 - Hạn mức ngân sách được cấu hình theo từng danh mục.
-- **Quy tắc kế thừa:** Khi người dùng xem một tháng mới (ví dụ tháng 10, 11, 12...) mà tháng đó chưa có dữ liệu ngân sách riêng:
-  - Hệ thống tự động truy vấn tìm **tháng gần nhất trước đó đã từng đặt ngân sách** (ví dụ tháng 9).
-  - Tự động lấy toàn bộ hạn mức đó áp dụng cho tháng mới.
-  - Hiển thị thông báo: `✨ Tự động kế thừa hạn mức từ tháng X/YYYY. Bấm nút thiết lập nếu muốn chỉnh sửa riêng cho tháng này.`
-- **Khi chỉnh sửa:** Nếu người dùng bấm lưu ngân sách cho tháng mới, hệ thống sẽ ghi đè bản ghi riêng cho tháng đó mà không làm ảnh hưởng các tháng khác.
+- **Quy tắc kế thừa theo danh mục:** Mỗi danh mục dùng hạn mức được thiết lập gần nhất, không muộn hơn tháng đang xem. Chỉnh một danh mục không làm mất hạn mức của các danh mục khác.
+- **Khi chỉnh sửa:** Hạn mức mới áp dụng từ tháng được chọn và tiếp tục cho các tháng sau, cho đến tháng có thiết lập mới hơn của chính danh mục đó. Không thay đổi hạn mức của các tháng trước.
+- **Sửa nhanh:** Bấm trực tiếp vào ô ngân sách để mở hộp thoại với đúng danh mục và hạn mức hiện hành.
+- Cả Tổng quan và Báo cáo dùng cùng quy tắc. Frontend lấy lịch sử ngân sách qua API hiện có nên không bắt buộc triển khai lại Apps Script để sử dụng cơ chế này.
 
 ### 4.3 Cảnh báo tiến độ ngân sách (3 cấp độ màu)
 - **Bình thường (Màu xanh lá):** Đã tiêu $< 80\%$ hạn mức.

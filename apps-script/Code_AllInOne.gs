@@ -530,30 +530,29 @@ function handleGetBudgets(payload) {
     return successResponse(list);
   }
 
-  let filtered = list.filter(b => Number(b.year) === year && Number(b.month) === month);
+  return successResponse(resolveBudgets(list, year, month));
+}
 
-  // Tự động kế thừa hạn mức từ tháng gần nhất trước đó nếu tháng này chưa đặt
-  if (filtered.length === 0 && list.length > 0) {
-    const pastBudgets = list
-      .filter(b => (Number(b.year) < year) || (Number(b.year) === year && Number(b.month) < month))
-      .sort((a, b) => (Number(b.year) - Number(a.year)) || (Number(b.month) - Number(a.month)));
-
-    if (pastBudgets.length > 0) {
-      const latestY = Number(pastBudgets[0].year);
-      const latestM = Number(pastBudgets[0].month);
-      filtered = pastBudgets
-        .filter(b => Number(b.year) === latestY && Number(b.month) === latestM)
-        .map(b => ({
-          ...b,
-          id: 'b_' + year + '_' + month + '_' + b.category_id,
-          year: year,
-          month: month,
-          inherited_from: latestM + '/' + latestY
-        }));
+// Resolve each category independently, including across year boundaries.
+function resolveBudgets(budgets, year, month) {
+  const latest = new Map();
+  budgets.forEach(budget => {
+    const period = Number(budget.year) * 12 + Number(budget.month);
+    if (period > year * 12 + month) return;
+    const previous = latest.get(budget.category_id);
+    if (!previous || period >= Number(previous.year) * 12 + Number(previous.month)) {
+      latest.set(budget.category_id, budget);
     }
-  }
-
-  return successResponse(filtered);
+  });
+  return Array.from(latest.values(), budget => ({
+    ...budget,
+    amount: Number(budget.amount),
+    id: 'b_' + year + '_' + month + '_' + budget.category_id,
+    year: year,
+    month: month,
+    inherited_from: Number(budget.year) === year && Number(budget.month) === month
+      ? undefined : budget.month + '/' + budget.year
+  }));
 }
 
 function handleSaveBudget(payload) {
@@ -755,18 +754,7 @@ function handleGetDashboardSummary(payload) {
     }
   ];
 
-  // Budget summary - tự động kế thừa hạn mức tháng gần nhất nếu tháng này chưa đặt
-  let monthBudgets = budgets.filter(b => Number(b.year) === year && Number(b.month) === month);
-  if (monthBudgets.length === 0 && budgets.length > 0) {
-    const pastBudgets = budgets
-      .filter(b => (Number(b.year) < year) || (Number(b.year) === year && Number(b.month) < month))
-      .sort((a, b) => (Number(b.year) - Number(a.year)) || (Number(b.month) - Number(a.month)));
-    if (pastBudgets.length > 0) {
-      const latestY = Number(pastBudgets[0].year);
-      const latestM = Number(pastBudgets[0].month);
-      monthBudgets = pastBudgets.filter(b => Number(b.year) === latestY && Number(b.month) === latestM);
-    }
-  }
+  const monthBudgets = resolveBudgets(budgets, year, month);
   let total_budget = 0;
   monthBudgets.forEach(b => { total_budget += Number(b.amount) || 0; });
   const budget_summary = {

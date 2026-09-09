@@ -1,3 +1,4 @@
+import { resolveBudgets } from '../utils/budgets';
 import { 
   Transaction, 
   Category, 
@@ -254,7 +255,17 @@ class ApiClient {
 
   async getDashboardSummary(year: number, month: number): Promise<DashboardSummary> {
     if (this.isLiveMode()) {
-      return this.requestGAS<DashboardSummary>('getDashboardSummary', { year, month });
+      const [summary, budgets] = await Promise.all([
+        this.requestGAS<DashboardSummary>('getDashboardSummary', { year, month }),
+        this.getBudgets(year, month),
+      ]);
+      const total = budgets.reduce((sum, budget) => sum + budget.amount, 0);
+      return { ...summary, budget_summary: {
+        total_budget: total,
+        total_spent: summary.total_expense,
+        remaining: Math.max(0, total - summary.total_expense),
+        percentage: total > 0 ? Math.round(summary.total_expense / total * 100) : 0,
+      } };
     }
 
     this.initMockStorage();
@@ -318,18 +329,7 @@ class ApiClient {
       },
     ];
 
-    // Budget usage summary - tự động kế thừa hạn mức tháng gần nhất nếu tháng này chưa đặt
-    let monthBudgets = budgets.filter((b) => b.year === year && b.month === month);
-    if (monthBudgets.length === 0 && budgets.length > 0) {
-      const pastBudgets = budgets
-        .filter((b) => b.year < year || (b.year === year && b.month < month))
-        .sort((a, b) => b.year - a.year || b.month - a.month);
-      if (pastBudgets.length > 0) {
-        const latestY = pastBudgets[0].year;
-        const latestM = pastBudgets[0].month;
-        monthBudgets = pastBudgets.filter((b) => b.year === latestY && b.month === latestM);
-      }
-    }
+    const monthBudgets = resolveBudgets(budgets, year, month);
     const total_budget = monthBudgets.reduce((sum, b) => sum + b.amount, 0);
     const budget_summary = {
       total_budget,
@@ -399,35 +399,12 @@ class ApiClient {
 
   async getBudgets(year: number, month: number): Promise<Budget[]> {
     if (this.isLiveMode()) {
-      return this.requestGAS<Budget[]>('getBudgets', { year, month });
+      // An unfiltered request also works with the existing Apps Script deployment.
+      const budgets = await this.requestGAS<Budget[]>('getBudgets', {});
+      return resolveBudgets(budgets, year, month);
     }
     this.initMockStorage();
-    const budgets = this.getLocal<Budget[]>(STORAGE_KEYS.BUDGETS, SAMPLE_BUDGETS);
-    const exact = budgets.filter((b) => b.year === year && b.month === month);
-    if (exact.length > 0) {
-      return exact;
-    }
-
-    // Tự động kế thừa hạn mức từ tháng gần nhất trước đó
-    const pastBudgets = budgets
-      .filter((b) => b.year < year || (b.year === year && b.month < month))
-      .sort((a, b) => b.year - a.year || b.month - a.month);
-
-    if (pastBudgets.length > 0) {
-      const latestY = pastBudgets[0].year;
-      const latestM = pastBudgets[0].month;
-      return pastBudgets
-        .filter((b) => b.year === latestY && b.month === latestM)
-        .map((b) => ({
-          ...b,
-          id: `b_${year}_${month}_${b.category_id}`,
-          year,
-          month,
-          inherited_from: `${latestM}/${latestY}`,
-        }));
-    }
-
-    return [];
+    return resolveBudgets(this.getLocal<Budget[]>(STORAGE_KEYS.BUDGETS, SAMPLE_BUDGETS), year, month);
   }
 
   async saveBudget(payload: { year: number; month: number; category_id: string; amount: number }): Promise<Budget> {

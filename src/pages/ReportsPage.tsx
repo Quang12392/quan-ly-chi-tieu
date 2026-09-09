@@ -36,6 +36,7 @@ export const ReportsPage: React.FC = () => {
   >([]);
 
   // Set budget modal
+  const [budgetCategoryId, setBudgetCategoryId] = useState<string>();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
   const loadData = async () => {
@@ -348,7 +349,7 @@ export const ReportsPage: React.FC = () => {
             <div className="space-y-4">
               {/* Header Action Button */}
               <button
-                onClick={() => setIsBudgetModalOpen(true)}
+                onClick={() => { setBudgetCategoryId(undefined); setIsBudgetModalOpen(true); }}
                 className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition active:scale-[0.99]"
               >
                 <Plus className="w-5 h-5 stroke-[2.5]" />
@@ -367,11 +368,11 @@ export const ReportsPage: React.FC = () => {
                   </span>
                 </div>
 
-                {budgets[0]?.inherited_from && (
+                {budgets.some((b) => b.inherited_from) && (
                   <div className="flex items-center gap-2 p-2.5 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl text-emerald-800 text-xs">
                     <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                     <span>
-                      Tự động kế thừa hạn mức từ <strong>tháng {budgets[0].inherited_from}</strong>. Bấm nút thiết lập ở trên nếu muốn chỉnh sửa riêng cho tháng này.
+                      Mỗi danh mục tự dùng hạn mức đã đặt gần nhất. Bấm vào từng danh mục để chỉnh; hạn mức mới tiếp tục áp dụng cho các tháng sau.
                     </span>
                   </div>
                 )}
@@ -395,7 +396,19 @@ export const ReportsPage: React.FC = () => {
                       const isWarning = percent >= 80 && percent < 100;
 
                       return (
-                        <div key={b.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                        <div key={b.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Chỉnh hạn mức ${cat ? cat.name : b.category_id}`}
+                          onClick={() => { setBudgetCategoryId(b.category_id); setIsBudgetModalOpen(true); }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setBudgetCategoryId(b.category_id);
+                              setIsBudgetModalOpen(true);
+                            }
+                          }}
+                          className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-2 cursor-pointer hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-slate-800 text-xs">
                               {cat ? cat.name : b.category_id}
@@ -464,6 +477,7 @@ export const ReportsPage: React.FC = () => {
         month={currentMonth}
         categories={categories}
         existingBudgets={budgets}
+        initialCategoryId={budgetCategoryId}
         onBudgetSaved={() => loadData()}
       />
     </div>
