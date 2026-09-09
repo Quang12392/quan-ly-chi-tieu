@@ -32,7 +32,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (pin === savedPin) {
       setCurrentUser(member);
       localStorage.setItem(AUTH_STORAGE_KEY, member);
-      localStorage.setItem('last_selected_member', member);
       return true;
     }
     return false;

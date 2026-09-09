@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { Category, TransactionType } from '../types';
 import { formatNumberWithDots, parseCurrencyInput, getTodayString } from '../utils/formatters';
@@ -8,14 +9,14 @@ import { Check, Loader2, ArrowLeft, Settings2 } from 'lucide-react';
 
 export const AddTransactionPage: React.FC = () => {
   const navigate = useNavigate();
+  const { key: entryKey } = useLocation();
+  const { currentUser } = useAuth();
   const amountInputRef = useRef<HTMLInputElement>(null);
 
   const [type, setType] = useState<TransactionType>('expense');
   const [amountStr, setAmountStr] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
-  const [memberId, setMemberId] = useState<string>(() => {
-    return localStorage.getItem('last_selected_member') || 'husband';
-  });
+  const [memberId, setMemberId] = useState<string>(currentUser || 'husband');
   const [date, setDate] = useState<string>(getTodayString());
   const [note, setNote] = useState<string>('');
 
@@ -26,6 +27,11 @@ export const AddTransactionPage: React.FC = () => {
 
   // Category modal
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+
+  // A choice made on behalf of another member belongs only to this form entry.
+  useEffect(() => {
+    setMemberId(currentUser || 'husband');
+  }, [currentUser, entryKey]);
 
   const loadCategories = async () => {
     try {
@@ -92,9 +98,6 @@ export const AddTransactionPage: React.FC = () => {
         member_id: memberId,
         note: note.trim() || undefined,
       });
-
-      // Remember last selected member
-      localStorage.setItem('last_selected_member', memberId);
 
       setSuccess(true);
       setTimeout(() => {
