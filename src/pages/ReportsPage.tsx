@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import { DashboardSummary, Budget, Category } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatCompactCurrency } from '../utils/formatters';
 import { SetBudgetModal } from '../components/budgets/SetBudgetModal';
 import { 
   PieChart, 
@@ -235,55 +235,69 @@ export const ReportsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* 6-Month Trend Visualizer (Pure SVG Bar Chart) */}
+              {/* 6-Month Trend Visualizer (SVG Line Chart) */}
               <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-slate-800 text-xs">Xu hướng thu chi 6 tháng gần nhất</h3>
                   <div className="flex items-center gap-3 text-[11px]">
                     <span className="flex items-center gap-1 text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Thu
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Thu
                     </span>
                     <span className="flex items-center gap-1 text-slate-600">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Chi
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Chi
                     </span>
                   </div>
                 </div>
 
-                {/* SVG Bar chart */}
-                <div className="h-40 w-full flex items-end justify-between pt-4 pb-1 px-1 border-b border-slate-100">
-                  {trend6Months.map((item) => {
-                    const incHeight = maxTrendVal > 0 ? (item.income / maxTrendVal) * 110 : 0;
-                    const expHeight = maxTrendVal > 0 ? (item.expense / maxTrendVal) * 110 : 0;
-
-                    return (
-                      <div key={item.label} className="flex-1 flex flex-col items-center justify-end h-full group">
-                        <div className="flex items-end gap-1 mb-1">
-                          {/* Income bar */}
-                          <div
-                            className="w-3 bg-emerald-500 hover:bg-emerald-600 rounded-t-sm transition-all duration-300 relative group/inc"
-                            style={{ height: `${Math.max(incHeight, 3)}px` }}
-                            title={`Thu ${item.label}: ${formatCurrency(item.income)}`}
-                          />
-                          {/* Expense bar */}
-                          <div
-                            className="w-3 bg-rose-500 hover:bg-rose-600 rounded-t-sm transition-all duration-300 relative group/exp"
-                            style={{ height: `${Math.max(expHeight, 3)}px` }}
-                            title={`Chi ${item.label}: ${formatCurrency(item.expense)}`}
-                          />
-                        </div>
-                        <span
-                          className={`text-[11px] font-semibold ${
-                            item.month === currentMonth && item.year === currentYear
-                              ? 'text-emerald-700 font-bold'
-                              : 'text-slate-400'
-                          }`}
-                        >
-                          {item.label}
-                        </span>
-                      </div>
-                    );
-                  })}
+                <div className="overflow-x-auto" tabIndex={0} aria-label="Biểu đồ thu chi 6 tháng, cuộn ngang để xem trên màn hình nhỏ">
+                  <svg viewBox="0 0 540 250" className="w-full min-w-[480px]" role="img" aria-label="Đường thu màu xanh và đường chi màu hồng, mỗi chấm là một tháng">
+                    <title>Xu hướng thu chi 6 tháng gần nhất</title>
+                    <desc>{trend6Months.map((item) => `${item.label}/${item.year}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`).join('; ')}</desc>
+                    {[40, 75, 110, 145, 180].map((y) => (
+                      <line key={y} x1="50" x2="490" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 5" />
+                    ))}
+                    {(['income', 'expense'] as const).map((series) => (
+                      <polyline
+                        key={series}
+                        points={trend6Months.map((item, index) => `${50 + index * 440 / Math.max(1, trend6Months.length - 1)},${180 - item[series] / maxTrendVal * 140}`).join(' ')}
+                        fill="none"
+                        stroke={series === 'income' ? '#059669' : '#e11d48'}
+                        strokeWidth="2.5"
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        strokeDasharray={series === 'expense' ? '6 3' : undefined}
+                      />
+                    ))}
+                    {trend6Months.map((item, index) => {
+                      const x = 50 + index * 440 / Math.max(1, trend6Months.length - 1);
+                      return (
+                        <g key={`${item.year}-${item.month}`}>
+                          {(['income', 'expense'] as const).map((series) => {
+                            const y = 180 - item[series] / maxTrendVal * 140;
+                            const income = series === 'income';
+                            const color = income ? '#059669' : '#e11d48';
+                            const labelAbove = income ? item.income >= item.expense : item.expense > item.income;
+                            return (
+                              <g key={series}>
+                                <circle cx={x} cy={y} r={income ? 5 : 3} fill="white" stroke={color} strokeWidth="2">
+                                  <title>{`${item.label}/${item.year} · ${income ? 'Thu' : 'Chi'}: ${formatCurrency(item[series])}`}</title>
+                                </circle>
+                                <text x={x} y={y + (labelAbove ? -13 : 20)} textAnchor="middle" fill={color} fontSize="11" fontWeight="600" stroke="white" strokeWidth="3" paintOrder="stroke">
+                                  {formatCompactCurrency(item[series])}
+                                </text>
+                              </g>
+                            );
+                          })}
+                          <text x={x} y="228" textAnchor="middle" fontSize="11" fontWeight="600" fill={item.month === currentMonth && item.year === currentYear ? '#047857' : '#64748b'}>
+                            {item.label}
+                          </text>
+                          <text x={x} y="243" textAnchor="middle" fontSize="10" fill="#94a3b8">{item.year}</text>
+                        </g>
+                      );
+                    })}
+                  </svg>
                 </div>
+                <p className="text-[10px] text-slate-400">Giá trị làm tròn đến nghìn đồng · 22tr325 = 22.325.000đ. Vuốt ngang nếu biểu đồ chưa hiện đủ.</p>
               </div>
 
               {/* Category Breakdown (Donut Bar & List) */}

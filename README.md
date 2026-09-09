@@ -37,6 +37,7 @@
 Xây dựng một ứng dụng web quản lý tài chính - chi tiêu gia đình tối giản, dễ dùng, chạy trên điện thoại và máy tính dành riêng cho đúng **2 vợ chồng**:
 - Ghi nhận chi tiêu / thu nhập chỉ trong 3 - 5 giây.
 - Xem ai là người chi, phân loại chi tiêu theo danh mục.
+- Biểu đồ đường thu/chi 6 tháng: mỗi tháng có chấm và nhãn giá trị làm tròn đến nghìn đồng (22.325.000đ → 22tr325; 384.000đ → 384k).
 - Theo dõi số dư, tỷ lệ tiết kiệm và xu hướng thu chi 6 tháng.
 - Thiết lập hạn mức ngân sách thông minh (tự động kế thừa qua từng tháng).
 - Toàn quyền sở hữu dữ liệu trên Google Sheets cá nhân, không lo mất dữ liệu.

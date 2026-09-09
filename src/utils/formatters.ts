@@ -10,6 +10,18 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** Compact VND rounded to the nearest thousand: 22,325,000 -> 22tr325. */
+export function formatCompactCurrency(amount: number): string {
+  if (!Number.isFinite(amount)) return '0đ';
+  const thousands = Math.round(Math.abs(amount) / 1000);
+  const sign = amount < 0 && thousands > 0 ? '-' : '';
+  if (thousands === 0) return '0đ';
+  if (thousands < 1000) return `${sign}${thousands}k`;
+  const millions = Math.floor(thousands / 1000);
+  const remainder = thousands % 1000;
+  return `${sign}${millions}tr${remainder ? String(remainder).padStart(3, '0') : ''}`;
+}
+
 /**
  * Format raw number to display with thousand separators (e.g. 250000 -> 250.000)
  */
