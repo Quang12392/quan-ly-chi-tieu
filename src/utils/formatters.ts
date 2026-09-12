@@ -71,16 +71,21 @@ export function formatDate(dateStr: string): string {
  */
 export function formatTransactionDateTime(dateStr: string, createdAt?: string): string {
   const date = formatDate(dateStr);
-  if (!createdAt) return date;
+  const time = formatTransactionTime(createdAt);
+  return time ? `${date} ${time}` : date;
+}
+
+/** Creation time shared by recent transactions and transaction history. */
+export function formatTransactionTime(createdAt?: string): string {
+  if (!createdAt) return '';
   const timestamp = new Date(createdAt);
-  if (Number.isNaN(timestamp.getTime())) return date;
-  const time = new Intl.DateTimeFormat('vi-VN', {
+  if (Number.isNaN(timestamp.getTime())) return '';
+  return new Intl.DateTimeFormat('vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh',
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
   }).format(timestamp);
-  return `${date} ${time}`;
 }
 
 /**

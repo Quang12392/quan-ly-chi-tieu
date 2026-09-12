@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { Transaction, Category, TransactionType } from '../types';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, formatTransactionTime } from '../utils/formatters';
 import { EditTransactionModal } from '../components/transactions/EditTransactionModal';
 import { 
   Search, 
@@ -305,6 +305,7 @@ export const TransactionsPage: React.FC = () => {
                 <div className="divide-y divide-slate-100">
                   {dayTxs.map((tx) => {
                     const cat = getCategory(tx.category_id);
+                    const time = formatTransactionTime(tx.created_at);
                     return (
                       <div
                         key={tx.id}
@@ -343,6 +344,11 @@ export const TransactionsPage: React.FC = () => {
                                 {tx.member_id === 'husband' ? 'Chồng' : 'Vợ'}
                               </span>
                             </div>
+                            {time && (
+                              <div className="text-[11px] text-slate-400 mt-0.5" title="Giờ tạo giao dịch (giờ Việt Nam)">
+                                {time}
+                              </div>
+                            )}
                           </div>
                         </div>
 
