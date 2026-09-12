@@ -330,14 +330,15 @@ Icon ứng dụng 3D sẽ xuất hiện ngay ngoài màn hình điện thoại, 
 2. **Cập nhật deployment đang dùng lên phiên bản mới trước khi chuyển dữ liệu**, giữ nguyên URL. Trước chuyển đổi, backend mới vẫn đọc bảng Transactions cũ.
 3. Chạy `migrateToYearlyStorage` từ trình chỉnh sửa Apps Script. Hàm tạo bản sao toàn bộ spreadsheet trên Drive trước khi ghi bảng mới; kiểm tra ID/ngày/số tiền/thành viên, đối chiếu từng trường giao dịch và toàn bộ dữ liệu bằng SHA-256 rồi mới bật storage_version=2. Nguồn Transactions gốc không bị xóa.
 4. Nếu ngắt giữa chừng, chạy lại hàm. Bản sao lưu không tạo lặp; dữ liệu nguồn phải còn nguyên và bản sao theo năm phải khớp. Nếu không khớp, hàm dừng thay vì ghi đè. Nếu còn trạng thái chuyển đổi dở, nhập giao dịch qua API được tạm chặn để bảo vệ nguồn.
-5. Hàm onEdit gắn với bảng tính đánh dấu báo cáo cần tính lại khi sửa trực tiếp, không cần cấp quyền Drive hoặc quyền tạo trigger bổ sung. App cũng kiểm tra số dòng của từng năm để phát hiện thêm/xóa dòng. Khi sửa ngày sang năm khác trực tiếp trong bảng, trigger chuyển giao dịch sang năm tương ứng. Trigger không chạy tức thời; nếu cần đối chiếu ngay, dùng Cài đặt → Tính lại báo cáo cho năm liên quan.
-6. Kiểm tra Cài đặt hiển thị “Đang lưu giao dịch theo năm”, mở bản sao lưu, kiểm tra Tổng quan và Báo cáo khớp số tiền trước chuyển đổi.
+5. Hàm onEdit gắn với bảng tính đánh dấu báo cáo cần tính lại khi sửa trực tiếp, không cần cấp quyền Drive hoặc quyền tạo trigger bổ sung. App cũng kiểm tra số dòng của từng năm để phát hiện thêm/xóa dòng. Khi sửa ngày sang năm khác trực tiếp trong bảng, trigger chuyển giao dịch sang năm tương ứng. Trigger không chạy tức thời; nếu cần đối chiếu ngay, dùng Cài đặt → Báo cáo → Tùy chọn báo cáo → Tính lại báo cáo cho năm liên quan.
+6. Kiểm tra API storageStatus trả storage_version=2, kiểm tra Tổng quan và Báo cáo khớp số tiền trước chuyển đổi.
 
 Không chỉnh bảng `Transactions` gốc sau chuyển đổi vì đây là bản đối chiếu. Không chỉnh tay MonthlySummary. Việc thay đổi bằng API ngoài ứng dụng có thể không kích hoạt trigger Google; phải dùng Tính lại báo cáo. Đổi cấu trúc cột, ID hoặc thành viên không hợp lệ sẽ làm kiểm tra dữ liệu báo lỗi, cần sửa dữ liệu gốc trước khi tính lại. Giữ mã ID duy nhất, không sao chép giao dịch thành dòng mới bằng tay.
 
 ### 9.2 Sao lưu và phục hồi
 
-- Link bản sao trước chuyển đổi được lưu trong Script Properties và hiển thị trong Cài đặt.
+- Link bản sao trước chuyển đổi được lưu trong Script Properties. Từ v2.1.2, giao diện không hiển thị link này; bản sao trên Drive vẫn được giữ nguyên.
+- Mục Cài đặt → Báo cáo được rút gọn, chức năng Tính lại báo cáo nằm trong phần Tùy chọn báo cáo mặc định thu gọn.
 - Nút JSON khi kết nối Sheets xuất dữ liệu Sheets thực tế; không xuất nhầm LocalStorage. CSV xuất giao dịch còn hiệu lực ở mọi năm. Xuất toàn bộ là thao tác chủ động có thể đọc nhiều dữ liệu, không diễn ra khi mở app.
 - Nhập JSON chỉ dành cho chế độ nội bộ. Với Sheets, phục hồi từ bản sao Drive và liên kết lại backend; không nhập đè dữ liệu cloud bằng thao tác nhập nội bộ.
 - Không hạ deployment xuống mã cũ sau khi đã chuyển dữ liệu: mã cũ chỉ biết bảng Transactions và sẽ bỏ sót giao dịch mới theo năm. Nếu cần phục hồi, dùng bản sao đầy đủ hoặc sửa backend mới.

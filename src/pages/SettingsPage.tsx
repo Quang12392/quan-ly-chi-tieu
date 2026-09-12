@@ -271,18 +271,27 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl p-4 border border-slate-200 space-y-3">
-        <h3 className="font-bold text-slate-800 text-sm">Dữ liệu & báo cáo dài hạn</h3>
-        <p className="text-xs text-slate-600">
-          {storageStatus?.storage_version === 2 ? 'Đang lưu giao dịch theo năm, biểu đồ dùng bảng tổng hợp tháng.' : storageStatus?.storage_version === 0 ? 'Đang lưu dữ liệu nội bộ trên thiết bị.' : 'Dữ liệu vẫn ở bảng cũ. Cần cập nhật kết nối và chuyển đổi một lần để bật lưu trữ theo năm.'}
-        </p>
-        {storageStatus?.migration_pending && <p className="text-xs text-amber-700">Chuyển đổi chưa hoàn tất. Tiếp tục chuyển đổi trước khi nhập thêm giao dịch.</p>}
-        {storageStatus?.backup_url && <a href={storageStatus.backup_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-700 underline">Mở bản sao lưu trước chuyển đổi</a>}
+      <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-3">
         <div className="flex items-center gap-2">
-          <label className="text-xs text-slate-600" htmlFor="rebuild-year">Năm</label>
-          <input id="rebuild-year" type="number" min="1900" max="9999" value={rebuildYear} onChange={e => setRebuildYear(Number(e.target.value))} className="w-24 p-2 border rounded-xl text-xs" />
-          <button onClick={rebuildReports} disabled={rebuilding || !storageStatus || storageStatus.api_version < 2} className="p-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 disabled:opacity-50">{rebuilding ? 'Đang tính...' : 'Tính lại báo cáo'}</button>
+          <RefreshCw className="w-5 h-5 text-emerald-600" />
+          <h3 className="font-bold text-slate-800 text-sm">Báo cáo</h3>
         </div>
+        <p className="text-xs text-slate-500 leading-relaxed">Báo cáo tự cập nhật khi bạn xem. Bạn không cần thao tác khi sang tháng hoặc năm mới.</p>
+        {storageStatus?.migration_pending && <p className="text-xs text-amber-700">Chuyển đổi chưa hoàn tất. Tiếp tục chuyển đổi trước khi nhập thêm giao dịch.</p>}
+        <details className="group border-t border-slate-100 pt-3">
+          <summary className="flex items-center justify-between cursor-pointer list-none text-xs font-medium text-slate-600 [&::-webkit-details-marker]:hidden">
+            Tùy chọn báo cáo
+            <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90" />
+          </summary>
+          <div className="pt-3 space-y-3">
+            <p className="text-[11px] text-slate-500">Nếu số liệu chưa khớp sau khi sửa trực tiếp trong Google Sheets, chọn năm và tính lại. Giao dịch đã ghi vẫn được giữ nguyên.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-xs text-slate-600" htmlFor="rebuild-year">Năm</label>
+              <input id="rebuild-year" type="number" min="1900" max="9999" value={rebuildYear} onChange={e => setRebuildYear(Number(e.target.value))} className="w-24 p-2 border rounded-xl text-xs" />
+              <button onClick={rebuildReports} disabled={rebuilding || !storageStatus || storageStatus.api_version < 2} className="p-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 disabled:opacity-50">{rebuilding ? 'Đang tính...' : 'Tính lại báo cáo'}</button>
+            </div>
+          </div>
+        </details>
         {maintenanceMessage && <p role="status" className="text-xs text-slate-600">{maintenanceMessage}</p>}
       </div>
 
