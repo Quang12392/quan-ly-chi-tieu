@@ -1,6 +1,7 @@
+import { PageSnapshot, DASHBOARD_REVISION_KEY } from '../utils/dashboardCache';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
-import { DashboardSummary, Budget, Category, YearTotal } from '../types';
+import { ReportBundle } from '../types';
 import { formatCurrency, formatCompactCurrency } from '../utils/formatters';
 import { SetBudgetModal } from '../components/budgets/SetBudgetModal';
 import { 
@@ -27,43 +28,51 @@ export const ReportsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'budgets'>('overview');
 
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [prevSummary, setPrevSummary] = useState<DashboardSummary | null>(null);
-  const [budgets, setBudgets] = useState<Budget[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [yearlyTrend, setYearlyTrend] = useState<
-    { month: number; year: number; label: string; income: number; expense: number; balance: number }[]
-  >([]);
+  const [snapshot, setSnapshot] = useState<PageSnapshot<ReportBundle> | null>(() => api.getCachedReport(currentYear,currentMonth));
+  const report = snapshot?.data.summary.year === currentYear && snapshot.data.summary.month === currentMonth ? snapshot.data : null;
+  const summary = report?.summary || null;
+  const prevSummary = report?.previous || null;
+  const budgets = report?.budgets || [];
+  const categories = report?.categories || [];
+  const yearlyTrend = report?.trend || [];
+  const yearTotals = report?.years || [];
 
   // Set budget modal
   const [budgetCategoryId, setBudgetCategoryId] = useState<string>();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
-  const [yearTotals, setYearTotals] = useState<YearTotal[]>([]);
   const [reportError, setReportError] = useState('');
   const requestVersion = useRef(0);
+  const refreshing = useRef(false);
   const loadData = async () => {
     const version = ++requestVersion.current;
+    refreshing.current = true;
     try {
       setLoading(true);
       setReportError('');
-      const report = await api.getReportBundle(currentYear, currentMonth);
+      const fresh = await api.getReportSnapshot(currentYear,currentMonth);
       if (version !== requestVersion.current) return;
-      setSummary(report.summary);
-      setPrevSummary(report.previous);
-      setBudgets(report.budgets);
-      setCategories(report.categories);
-      setYearlyTrend(report.trend);
-      setYearTotals(report.years);
+      setSnapshot(fresh);
     } catch (err) {
       if (version === requestVersion.current) setReportError(err instanceof Error ? err.message : 'Không thể tải báo cáo');
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (version === requestVersion.current) { setLoading(false); refreshing.current = false; }
     }
   };
   useEffect(() => {
+    setSnapshot(api.getCachedReport(currentYear,currentMonth));
     void loadData();
-    return () => { requestVersion.current++; };
+    const resume = () => { if (document.visibilityState === 'visible' && !refreshing.current) void loadData(); };
+    const changed = (event: StorageEvent) => { if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); } };
+    window.addEventListener('online',resume);
+    document.addEventListener('visibilitychange',resume);
+    window.addEventListener('storage',changed);
+    return () => {
+      requestVersion.current++;
+      window.removeEventListener('online',resume);
+      document.removeEventListener('visibilitychange',resume);
+      window.removeEventListener('storage',changed);
+    };
   }, [currentMonth, currentYear]);
 
   const handlePrevMonth = () => {
@@ -161,7 +170,13 @@ export const ReportsPage: React.FC = () => {
         </button>
       </div>
 
-      {loading ? (
+      <div role="status" className="flex items-start justify-between gap-2 text-[11px] text-slate-500">
+        <div><p>{loading ? (report ? 'Đang cập nhật · đang hiển thị bản đã lưu trên máy' : 'Đang lấy báo cáo mới…') : reportError ? 'Chưa cập nhật được báo cáo.' : 'Đã cập nhật báo cáo'}</p>
+          {report && snapshot && <p>Lần cập nhật: {new Intl.DateTimeFormat('vi-VN',{dateStyle:'short',timeStyle:'short',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(snapshot.savedAt)}</p>}
+        </div>
+        <button disabled={loading} onClick={loadData} className="text-emerald-700 font-semibold shrink-0 disabled:opacity-50">{loading ? 'Đang tải…' : 'Cập nhật'}</button>
+      </div>
+      {loading && !report ? (
         <div className="py-14 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="w-8 h-8 animate-spin mb-2 text-emerald-600" />
           <p className="text-xs">Đang tải số liệu báo cáo...</p>

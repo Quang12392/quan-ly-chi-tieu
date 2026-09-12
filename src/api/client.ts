@@ -1,4 +1,4 @@
-import { DashboardSnapshot, clearDashboardCache, dashboardRevision, readDashboardCache, writeDashboardCache, validDashboard } from '../utils/dashboardCache';
+import { PageSnapshot, readPageCache, writePageCache, DashboardSnapshot, clearDashboardCache, dashboardRevision, readDashboardCache, writeDashboardCache, validDashboard } from '../utils/dashboardCache';
 import { summarizeTransactions } from '../utils/summary';
 import { TransactionQuery, TransactionPage, ReportBundle, StorageStatus } from '../types';
 import { resolveBudgets } from '../utils/budgets';
@@ -544,6 +544,46 @@ class ApiClient {
       expense: s.total_expense,
       balance: s.balance,
     }));
+  }
+
+  transactionViewKey(query: TransactionQuery): string {
+    return JSON.stringify(['transactions',query.from || '',query.through || '',query.type || '',query.member_id || '',query.category_id || '',(query.search || '').trim(),query.limit || 100]);
+  }
+  private validTransactionView(data: unknown): data is {page: TransactionPage; categories: Category[]} {
+    const view = data as {page?: TransactionPage; categories?: Category[]} | null;
+    return !!view && !!view.page && Array.isArray(view.page.items) && Array.isArray(view.categories)
+      && view.page.items.every(t => t && typeof t.id === 'string' && typeof t.date === 'string' && Number.isFinite(t.amount));
+  }
+  getCachedTransactions(query: TransactionQuery): PageSnapshot<{page: TransactionPage; categories: Category[]}> | null {
+    return readPageCache(this.dashboardScope(),this.transactionViewKey(query),data => this.validTransactionView(data));
+  }
+  async getTransactionSnapshot(query: TransactionQuery): Promise<PageSnapshot<{page: TransactionPage; categories: Category[]}>> {
+    const scope = this.dashboardScope(), revision = dashboardRevision();
+    const [page,categories] = await Promise.all([this.getTransactionPage(query),this.getCategories()]);
+    const data = {page,categories};
+    if (!this.validTransactionView(data)) throw new Error('Không thể đọc danh sách. Vui lòng tải lại.');
+    if (scope !== this.dashboardScope() || revision !== dashboardRevision()) throw new Error('Dữ liệu vừa thay đổi. Vui lòng tải lại.');
+    const snapshot = {data,savedAt:Date.now()};
+    // Only the first page is cached. Old cursors must be revalidated before paging.
+    if (!query.cursor) writePageCache(scope,this.transactionViewKey(query),snapshot);
+    return snapshot;
+  }
+  private validReport(data: unknown): data is ReportBundle {
+    const r = data as ReportBundle | null;
+    return !!r && validDashboard(r.summary) && validDashboard(r.previous) && Array.isArray(r.categories)
+      && Array.isArray(r.budgets) && Array.isArray(r.trend) && Array.isArray(r.years);
+  }
+  getCachedReport(year: number, month: number): PageSnapshot<ReportBundle> | null {
+    return readPageCache(this.dashboardScope(),`report:${year}:${month}`,data => this.validReport(data));
+  }
+  async getReportSnapshot(year: number, month: number): Promise<PageSnapshot<ReportBundle>> {
+    const scope = this.dashboardScope(), revision = dashboardRevision();
+    const data = await this.getReportBundle(year,month);
+    if (!this.validReport(data) || data.summary.year !== year || data.summary.month !== month) throw new Error('Số liệu báo cáo không hợp lệ.');
+    if (scope !== this.dashboardScope() || revision !== dashboardRevision()) throw new Error('Dữ liệu vừa thay đổi. Vui lòng tải lại.');
+    const snapshot = {data,savedAt:Date.now()};
+    writePageCache(scope,`report:${year}:${month}`,snapshot);
+    return snapshot;
   }
 
   async getTransactionPage(query: TransactionQuery): Promise<TransactionPage> {

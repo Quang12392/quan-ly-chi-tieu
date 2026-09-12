@@ -1,7 +1,8 @@
+import { PageSnapshot, DASHBOARD_REVISION_KEY } from '../utils/dashboardCache';
 import { useLocation } from 'react-router-dom';
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../api/client';
-import { Transaction, Category, TransactionType } from '../types';
+import { Transaction, Category, TransactionType, TransactionPage } from '../types';
 import { formatCurrency, formatDate, formatTransactionTime, getMonthRange } from '../utils/formatters';
 import { EditTransactionModal } from '../components/transactions/EditTransactionModal';
 import { 
@@ -19,8 +20,6 @@ import {
 export const TransactionsPage: React.FC = () => {
   const location = useLocation();
   const [loading, setLoading] = useState(true);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
 
   // Month navigation
   const now = new Date();
@@ -37,47 +36,66 @@ export const TransactionsPage: React.FC = () => {
   // Editing state
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const query = {
+    ...(allTime ? {} : getMonthRange(selectedYear,selectedMonth)),
+    type: filterType === 'all' ? undefined : filterType,
+    member_id: selectedMember === 'all' ? undefined : selectedMember,
+    category_id: selectedCategory === 'all' ? undefined : selectedCategory,
+    search: searchNote.trim(),limit:100,
+  };
+  const queryKey = api.transactionViewKey(query);
+  type View = PageSnapshot<{page:TransactionPage;categories:Category[]}> & {key:string;fresh:boolean};
+  const [snapshot,setSnapshot] = useState<View | null>(() => {
+    const cached = api.getCachedTransactions(query);
+    return cached ? {...cached,key:queryKey,fresh:false} : null;
+  });
+  const view = snapshot?.key === queryKey ? snapshot : null;
+  const transactions = view?.data.page.items || [];
+  const categories = view?.data.categories || [];
+  const nextCursor = view?.fresh ? view.data.page.next_cursor : null;
   const [loadError, setLoadError] = useState('');
   const requestVersion = useRef(0);
+  const refreshing = useRef(false);
   const loadData = async (append = false) => {
     const version = ++requestVersion.current;
+    refreshing.current = true;
     try {
       setLoading(true);
       setLoadError('');
-      const [page, catList] = await Promise.all([
-        api.getTransactionPage({
-          ...(allTime ? {} : getMonthRange(selectedYear, selectedMonth)),
-          type: filterType === 'all' ? undefined : filterType,
-          member_id: selectedMember === 'all' ? undefined : selectedMember,
-          category_id: selectedCategory === 'all' ? undefined : selectedCategory,
-          search: searchNote.trim(), limit: 100, cursor: append ? nextCursor : null,
-        }),
-        api.getCategories(),
-      ]);
+      const fresh = await api.getTransactionSnapshot({...query,cursor:append ? nextCursor : null});
       if (version !== requestVersion.current) return;
-      if (!Array.isArray(page.items) || !Array.isArray(catList)) throw new Error('Không thể đọc danh sách. Vui lòng tải lại.');
-      setTransactions(previous => append ? [...previous, ...page.items] : page.items);
-      setNextCursor(page.next_cursor);
-      setCategories(catList);
+      setSnapshot(previous => ({...fresh,key:queryKey,fresh:true,data:{...fresh.data,page:{...fresh.data.page,
+        items:append && previous?.key === queryKey ? [...previous.data.page.items,...fresh.data.page.items] : fresh.data.page.items,
+      }}}));
     } catch (err) {
       if (version !== requestVersion.current) return;
       setLoadError(err instanceof Error ? err.message : 'Không thể tải giao dịch');
-      // Do not mix previous pages with a changed dataset.
-      setNextCursor(null);
+      // Preserve the visible preview, but never append using its stale cursor.
+      setSnapshot(previous => previous ? {...previous,fresh:false} : null);
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (version === requestVersion.current) { setLoading(false); refreshing.current = false; }
     }
   };
 
   useEffect(() => {
     requestVersion.current++;
+    const cached = api.getCachedTransactions(query);
+    setSnapshot(cached ? {...cached,key:queryKey,fresh:false} : null);
     setLoading(true);
-    setTransactions([]);
-    setNextCursor(null);
+    refreshing.current = true;
     const timer = window.setTimeout(() => { void loadData(); }, 250);
-    return () => { window.clearTimeout(timer); requestVersion.current++; };
-  }, [selectedYear, selectedMonth, allTime, filterType, selectedMember, selectedCategory, searchNote]);
+    const resume = () => { if (document.visibilityState === 'visible' && !refreshing.current) void loadData(); };
+    const changed = (event: StorageEvent) => { if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); } };
+    window.addEventListener('online',resume);
+    document.addEventListener('visibilitychange',resume);
+    window.addEventListener('storage',changed);
+    return () => {
+      window.clearTimeout(timer); requestVersion.current++;
+      window.removeEventListener('online',resume);
+      document.removeEventListener('visibilitychange',resume);
+      window.removeEventListener('storage',changed);
+    };
+  }, [queryKey]);
 
   const [savedNotice, setSavedNotice] = useState('');
   const [savedReportDate, setSavedReportDate] = useState<string | null>(null);
@@ -292,7 +310,13 @@ export const TransactionsPage: React.FC = () => {
       </div>
 
       {/* Transaction List grouped by date */}
-      {loading && transactions.length === 0 ? (
+      <div role="status" className="flex items-start justify-between gap-2 text-[11px] text-slate-500">
+        <div><p>{loading ? (view ? 'Đang cập nhật · đang hiển thị dữ liệu đã tải trước đó' : 'Đang lấy giao dịch mới…') : loadError ? 'Chưa cập nhật được danh sách.' : 'Đã cập nhật giao dịch'}</p>
+          {view && <p>Lần cập nhật: {new Intl.DateTimeFormat('vi-VN',{dateStyle:'short',timeStyle:'short',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(view.savedAt)}</p>}
+        </div>
+        <button disabled={loading} onClick={() => loadData()} className="text-emerald-700 font-semibold shrink-0 disabled:opacity-50">{loading ? 'Đang tải…' : 'Cập nhật'}</button>
+      </div>
+      {loading && !view ? (
         <div className="py-12 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="w-8 h-8 animate-spin mb-2 text-emerald-600" />
           <p className="text-sm">Đang tải danh sách giao dịch...</p>

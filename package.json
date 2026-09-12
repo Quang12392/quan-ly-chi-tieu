@@ -1,14 +1,15 @@
 {
   "name": "family-expense-manager",
   "private": true,
-  "version": "2.1.3",
+  "version": "2.1.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test:storage": "node tests/client-storage.mjs && node tests/budgets.mjs",
-    "test:startup": "node tests/dashboard-cache.mjs"
+    "test:startup": "node tests/dashboard-cache.mjs",
+    "test:pages": "node tests/page-cache.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -357,3 +357,13 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Khi quay lại app từ nền hoặc có mạng trở lại, Tổng quan cập nhật ngầm. Không phải đồng bộ đẩy thời gian thực: giao dịch vừa nhập trên máy còn lại có thể chưa hiện trên bản xem trước cho đến khi tải xong. Luôn có nút Cập nhật và thời điểm đồng bộ để người dùng nhận biết.
 - Yêu cầu đọc có giới hạn chờ 20 giây; ghi 45 giây. Nếu ghi hết thời gian chờ, kết quả có thể đã được ghi ở máy chủ: app yêu cầu kiểm tra Lịch sử trước khi lưu lại và không tự gửi lại giao dịch.
 - Chạy `npm run test:startup` để kiểm tra một yêu cầu mở Tổng quan, phân tách cache, hai máy nhập nối tiếp, đọc cũ hoàn tất sau ghi, lỗi mạng, timeout và bộ nhớ trình duyệt đầy.
+
+
+### 9.5 Mở nhanh Giao dịch và Báo cáo (v2.1.4)
+
+- Hai tab hiển thị bản gần nhất trên máy trước, cập nhật ngầm sau, giống Tổng quan. Hiển thị trạng thái, thời điểm cập nhật 24 giờ và nút Cập nhật. Lần đầu hoặc bộ lọc/tháng chưa có bản lưu vẫn cần chờ máy chủ.
+- Bản xem trước được tách theo kết nối, thành viên, tháng và toàn bộ bộ lọc (ngày, loại thu/chi, thành viên, danh mục, tìm kiếm). Lưu tối đa 8 bản cho hai tab; lỗi/quota bộ nhớ không làm hỏng việc tải dữ liệu.
+- Giao dịch chỉ lưu trang đầu tối đa 100 kết quả. Không dùng con trỏ cũ để Xem thêm trước khi xác nhận lại trang đầu từ máy chủ; sau cập nhật thay thế danh sách cũ, không nối trùng trang.
+- Cùng vô hiệu hóa bản lưu với Tổng quan khi ghi dữ liệu, đổi kết nối, đăng xuất. Phản hồi đến muộn sau thao tác ghi không được lưu lại. Nếu tải mới thất bại, giữ bản xem trước cùng thông báo lỗi và nút thử lại.
+- Tự cập nhật khi mở tab, đổi tháng/bộ lọc, quay lại app từ nền hoặc có mạng trở lại. **Không có lịch đồng bộ 60 giây hay bất kỳ chu kỳ định kỳ nào.** Ô tìm kiếm chờ 250ms để giảm yêu cầu khi đang gõ; đây không phải lịch đồng bộ.
+- Kiểm thử: `npm run test:pages`, `npm run test:startup`, `npm run test:storage`, `npm run build`.
