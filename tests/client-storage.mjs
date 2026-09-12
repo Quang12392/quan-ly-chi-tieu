@@ -30,3 +30,11 @@ const searched=await api.getTransactionPage({search:'Ăn uống',from:'2025-01-0
 legacy=true;calls.length=0;const older=await makeApi('legacy');r=await older.getReportBundle(2026,9);assert.equal(r.summary.total_expense,120000);assert.equal(calls.filter(a=>a==='getTransactions').length,1);assert.equal(calls.includes('getDashboardSummary'),false);
 store.delete('fam_exp_api_url');store.set('fam_exp_transactions',JSON.stringify(records));const offline=await makeApi('offline');assert.equal((await offline.getReportBundle(2026,9)).summary.total_expense,120000);assert.equal((await offline.getTransactionPage({from:'2025-01-01',through:'2025-01-31'})).items.length,100);
 console.log('Client integration passed: modern request count, legacy one-scan fallback, offline filtering, pagination.');
+
+store.set('fam_exp_api_url','https://mock-empty.invalid');
+global.fetch=async (_url,opts)=>({ok:true,json:async()=>({ok:true,data:JSON.parse(opts.body).action==='storageStatus'?{api_version:2,storage_version:2}:[]})});
+const emptyApi=await makeApi('empty-response');
+assert.deepEqual(await emptyApi.getTransactionPage({from:'2026-10-01',through:'2026-10-31'}),{items:[],next_cursor:null});
+global.fetch=async()=>({ok:true,json:async()=>({ok:true,data:{}})});
+await assert.rejects(()=>emptyApi.getTransactionPage({}),/không hợp lệ/);
+console.log('Empty and malformed page responses handled safely.');

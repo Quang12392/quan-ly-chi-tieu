@@ -506,7 +506,13 @@ class ApiClient {
 
   async getTransactionPage(query: TransactionQuery): Promise<TransactionPage> {
     if (this.isLiveMode() && (await this.getStorageStatus()).api_version >= 2) {
-      return this.requestGAS<TransactionPage>('getTransactionsPage', { ...query });
+      const page = await this.requestGAS<TransactionPage | Transaction[]>('getTransactionsPage', { ...query });
+      // Some older deployments return [] for an empty date range.
+      if (Array.isArray(page) && page.length === 0) return { items: [], next_cursor: null };
+      if (!page || Array.isArray(page) || !Array.isArray(page.items)) {
+        throw new Error('Phản hồi danh sách giao dịch không hợp lệ. Vui lòng tải lại.');
+      }
+      return { items: page.items, next_cursor: page.next_cursor || null };
     }
     // Compatibility with the previous deployment: month filtering is already supported.
     const [transactions, categories] = await Promise.all([this.getTransactions(query), this.getCategories()]);

@@ -54,6 +54,7 @@ export const TransactionsPage: React.FC = () => {
         api.getCategories(),
       ]);
       if (version !== requestVersion.current) return;
+      if (!Array.isArray(page.items) || !Array.isArray(catList)) throw new Error('Không thể đọc danh sách. Vui lòng tải lại.');
       setTransactions(previous => append ? [...previous, ...page.items] : page.items);
       setNextCursor(page.next_cursor);
       setCategories(catList);
