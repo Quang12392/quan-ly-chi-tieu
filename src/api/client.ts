@@ -1,3 +1,5 @@
+import { summarizeTransactions } from '../utils/summary';
+import { TransactionQuery, TransactionPage, ReportBundle, StorageStatus } from '../types';
 import { resolveBudgets } from '../utils/budgets';
 import { 
   Transaction, 
@@ -30,6 +32,27 @@ const STORAGE_KEYS = {
 };
 
 class ApiClient {
+  private metadata = new Map<string, { expires: number; value: Promise<unknown> }>();
+  private invalidate() { this.metadata.clear(); }
+  private memo<T>(key: string, loader: () => Promise<T>, ttl = 15000): Promise<T> {
+    const fullKey = this.getApiUrl() + key;
+    const old = this.metadata.get(fullKey);
+    if (old && old.expires > Date.now()) return old.value as Promise<T>;
+    const value = loader().catch(error => { this.metadata.delete(fullKey); throw error; });
+    this.metadata.set(fullKey, { value, expires: Date.now() + ttl });
+    return value;
+  }
+  async getStorageStatus(): Promise<StorageStatus> {
+    if (!this.isLiveMode()) return { api_version: 2, storage_version: 0 };
+    return this.memo('storageStatus', async () => {
+      try { return await this.requestGAS<StorageStatus>('storageStatus'); }
+      catch (error) {
+        if (error instanceof Error && error.message.startsWith('INVALID_ACTION:')) return { api_version: 1, storage_version: 1 };
+        throw error;
+      }
+    }, 30000);
+  }
+
   private getApiUrl(): string {
     return (
       localStorage.getItem(STORAGE_KEYS.API_URL) ||
@@ -39,6 +62,7 @@ class ApiClient {
   }
 
   public setApiUrl(url: string) {
+    this.invalidate();
     if (url) {
       localStorage.setItem(STORAGE_KEYS.API_URL, url.trim());
     } else {
@@ -112,13 +136,15 @@ class ApiClient {
 
       const res = await response.json();
       if (!res.ok) {
-        throw new Error(res.error?.message || 'Có lỗi xảy ra khi xử lý dữ liệu');
+        throw new Error(`${res.error?.code || 'SERVER_ERROR'}: ${res.error?.message || 'Có lỗi xảy ra khi xử lý dữ liệu'}`);
       }
 
       return res.data as T;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
       throw new Error(msg);
+    } finally {
+      if (/^(create|update|delete|save|rebuild)/.test(action)) this.invalidate();
     }
   }
 
@@ -192,6 +218,7 @@ class ApiClient {
   }
 
   async createTransaction(payload: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted'>): Promise<Transaction> {
+    this.invalidate();
     if (this.isLiveMode()) {
       return this.requestGAS<Transaction>('createTransaction', payload as unknown as Record<string, unknown>);
     }
@@ -212,9 +239,10 @@ class ApiClient {
     return newTx;
   }
 
-  async updateTransaction(id: string, payload: Partial<Transaction>): Promise<Transaction> {
+  async updateTransaction(id: string, payload: Partial<Transaction>, originalYear?: number): Promise<Transaction> {
+    this.invalidate();
     if (this.isLiveMode()) {
-      return this.requestGAS<Transaction>('updateTransaction', { id, ...payload });
+      return this.requestGAS<Transaction>('updateTransaction', { id, ...payload, original_year: originalYear });
     }
 
     this.initMockStorage();
@@ -234,9 +262,10 @@ class ApiClient {
     return updated;
   }
 
-  async deleteTransaction(id: string): Promise<boolean> {
+  async deleteTransaction(id: string, originalYear?: number): Promise<boolean> {
+    this.invalidate();
     if (this.isLiveMode()) {
-      return this.requestGAS<boolean>('deleteTransaction', { id });
+      return this.requestGAS<boolean>('deleteTransaction', { id, original_year: originalYear });
     }
 
     this.initMockStorage();
@@ -255,6 +284,7 @@ class ApiClient {
 
   async getDashboardSummary(year: number, month: number): Promise<DashboardSummary> {
     if (this.isLiveMode()) {
+      if ((await this.getStorageStatus()).api_version >= 2) return this.requestGAS<DashboardSummary>('getDashboardSummary', {year, month});
       const [summary, budgets] = await Promise.all([
         this.requestGAS<DashboardSummary>('getDashboardSummary', { year, month }),
         this.getBudgets(year, month),
@@ -361,13 +391,14 @@ class ApiClient {
 
   async getCategories(): Promise<Category[]> {
     if (this.isLiveMode()) {
-      return this.requestGAS<Category[]>('getCategories');
+      return this.memo('categories', () => this.requestGAS<Category[]>('getCategories'));
     }
     this.initMockStorage();
     return this.getLocal<Category[]>(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
   }
 
   async createCategory(payload: Omit<Category, 'id'>): Promise<Category> {
+    this.invalidate();
     if (this.isLiveMode()) {
       return this.requestGAS<Category>('createCategory', payload as unknown as Record<string, unknown>);
     }
@@ -383,6 +414,7 @@ class ApiClient {
   }
 
   async updateCategory(id: string, payload: Partial<Category>): Promise<Category> {
+    this.invalidate();
     if (this.isLiveMode()) {
       return this.requestGAS<Category>('updateCategory', { id, ...payload });
     }
@@ -400,7 +432,7 @@ class ApiClient {
   async getBudgets(year: number, month: number): Promise<Budget[]> {
     if (this.isLiveMode()) {
       // An unfiltered request also works with the existing Apps Script deployment.
-      const budgets = await this.requestGAS<Budget[]>('getBudgets', {});
+      const budgets = await this.memo('budgets', () => this.requestGAS<Budget[]>('getBudgets', {}));
       return resolveBudgets(budgets, year, month);
     }
     this.initMockStorage();
@@ -408,6 +440,7 @@ class ApiClient {
   }
 
   async saveBudget(payload: { year: number; month: number; category_id: string; amount: number }): Promise<Budget> {
+    this.invalidate();
     if (this.isLiveMode()) {
       return this.requestGAS<Budget>('saveBudget', payload);
     }
@@ -471,7 +504,53 @@ class ApiClient {
     }));
   }
 
+  async getTransactionPage(query: TransactionQuery): Promise<TransactionPage> {
+    if (this.isLiveMode() && (await this.getStorageStatus()).api_version >= 2) {
+      return this.requestGAS<TransactionPage>('getTransactionsPage', { ...query });
+    }
+    // Compatibility with the previous deployment: month filtering is already supported.
+    const [transactions, categories] = await Promise.all([this.getTransactions(query), this.getCategories()]);
+    const q = (query.search || '').trim().toLowerCase();
+    const list = transactions.filter(t => !q || `${t.note || ''} ${categories.find(c => c.id === t.category_id)?.name || ''}`.toLowerCase().includes(q));
+    const offset = Number(query.cursor || 0), limit = query.limit || 100;
+    return { items: list.slice(offset, offset + limit), next_cursor: list.length > offset + limit ? String(offset + limit) : null };
+  }
+
+  async getReportBundle(year: number, month: number): Promise<ReportBundle> {
+    if (this.isLiveMode() && (await this.getStorageStatus()).api_version >= 2) {
+      return this.requestGAS<ReportBundle>('getReportBundle', {year, month});
+    }
+    // One detail request for the entire report, instead of 14 separate scans.
+    const [transactions, categories] = await Promise.all([this.getTransactions(), this.getCategories()]);
+    const budgets = this.isLiveMode()
+      ? await this.memo('budgets', () => this.requestGAS<Budget[]>('getBudgets', {}))
+      : this.getLocal<Budget[]>(STORAGE_KEYS.BUDGETS, SAMPLE_BUDGETS);
+    const summarize = (y: number, m: number) => summarizeTransactions(transactions, categories, budgets, INITIAL_MEMBERS, y, m);
+    const trend = Array.from({length: 12}, (_, i) => {
+      const s = summarize(year, i + 1);
+      return { year, month: i + 1, label: `T${i + 1}`, income: s.total_income, expense: s.total_expense, balance: s.balance };
+    });
+    const years = Array.from(new Set(transactions.map(t => Number(t.date.slice(0, 4))).concat(year))).sort((a,b) => a-b).map(y => {
+      const txs = transactions.filter(t => Number(t.date.slice(0,4)) === y);
+      const income = txs.filter(t => t.type === 'income').reduce((sum,t) => sum+t.amount,0);
+      const expense = txs.filter(t => t.type === 'expense').reduce((sum,t) => sum+t.amount,0);
+      return {year:y,income,expense,balance:income-expense};
+    });
+    return { summary: summarize(year, month), previous: summarize(month === 1 ? year-1 : year, month === 1 ? 12 : month-1), categories, budgets: resolveBudgets(budgets, year, month), trend, years };
+  }
+
+  async rebuildSummaries(year: number): Promise<void> {
+    this.invalidate();
+    if (!this.isLiveMode()) return;
+    if ((await this.getStorageStatus()).api_version < 2) throw new Error('Cần cập nhật Apps Script trước khi tính lại báo cáo.');
+    await this.requestGAS('rebuildSummaries', {year});
+  }
+
   async exportAllData() {
+    if (this.isLiveMode()) {
+      if ((await this.getStorageStatus()).api_version < 2) throw new Error('Cần cập nhật Apps Script để sao lưu toàn bộ dữ liệu Google Sheets. Bạn vẫn có thể xuất CSV.');
+      return this.requestGAS('exportData');
+    }
     this.initMockStorage();
     return {
       schema_version: 1,
@@ -513,6 +592,7 @@ class ApiClient {
     budgets?: Budget[];
     settings?: AppSettings;
   }): Promise<{ transactionsCount: number; categoriesCount: number; budgetsCount: number }> {
+    if (this.isLiveMode()) throw new Error('Nhập JSON chỉ áp dụng cho dữ liệu nội bộ. Dữ liệu Google Sheets cần khôi phục từ bản sao lưu trên Drive.');
     if (!data || typeof data !== 'object') {
       throw new Error('Định dạng file JSON không hợp lệ');
     }

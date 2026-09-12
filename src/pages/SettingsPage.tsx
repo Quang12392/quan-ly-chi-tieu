@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
-import { Category } from '../types';
+import { Category, StorageStatus } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { CategoryManagerModal } from '../components/categories/CategoryManagerModal';
 import { APP_VERSION } from '../version';
@@ -43,6 +43,21 @@ export const SettingsPage: React.FC = () => {
   // Import state
   const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
+  const [rebuildYear, setRebuildYear] = useState(new Date().getFullYear());
+  const [rebuilding, setRebuilding] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState('');
+  useEffect(() => { api.getStorageStatus().then(setStorageStatus).catch(error => setMaintenanceMessage(String(error))); }, []);
+  const rebuildReports = async () => {
+    setRebuilding(true);
+    setMaintenanceMessage('');
+    try {
+      await api.rebuildSummaries(rebuildYear);
+      setMaintenanceMessage(`Đã tính lại báo cáo năm ${rebuildYear} từ giao dịch gốc. Mở Báo cáo để xem số liệu mới.`);
+    } catch (error) { setMaintenanceMessage(error instanceof Error ? error.message : 'Không thể tính lại báo cáo'); }
+    finally { setRebuilding(false); }
+  };
+
   const loadCategories = async () => {
     try {
       const list = await api.getCategories();
@@ -58,6 +73,8 @@ export const SettingsPage: React.FC = () => {
 
   const handleSaveGasUrl = () => {
     api.setApiUrl(gasUrl.trim());
+    api.getStorageStatus().then(setStorageStatus).catch(error => setMaintenanceMessage(String(error)));
+    void loadCategories();
     setTestResult({
       success: true,
       message: gasUrl.trim()
@@ -79,6 +96,8 @@ export const SettingsPage: React.FC = () => {
       setTesting(true);
       setTestResult(null);
       api.setApiUrl(gasUrl.trim());
+    api.getStorageStatus().then(setStorageStatus).catch(error => setMaintenanceMessage(String(error)));
+    void loadCategories();
       const data = await api.getBootstrapData();
       setTestResult({
         success: true,
@@ -96,6 +115,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleExportJSON = async () => {
+    try {
     const data = await api.exportAllData();
     const jsonStr = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -105,9 +125,11 @@ export const SettingsPage: React.FC = () => {
     a.download = `family_expense_backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    } catch (error) { setMaintenanceMessage(error instanceof Error ? error.message : 'Không thể xuất dữ liệu'); }
   };
 
   const handleExportCSV = async () => {
+    try {
     const csvContent = await api.exportTransactionsCSV();
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -116,6 +138,7 @@ export const SettingsPage: React.FC = () => {
     a.download = `family_transactions_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    } catch (error) { setMaintenanceMessage(error instanceof Error ? error.message : 'Không thể xuất dữ liệu'); }
   };
 
   const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -246,6 +269,21 @@ export const SettingsPage: React.FC = () => {
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
+      </div>
+
+      <div className="bg-white rounded-3xl p-4 border border-slate-200 space-y-3">
+        <h3 className="font-bold text-slate-800 text-sm">Dữ liệu & báo cáo dài hạn</h3>
+        <p className="text-xs text-slate-600">
+          {storageStatus?.storage_version === 2 ? 'Đang lưu giao dịch theo năm, biểu đồ dùng bảng tổng hợp tháng.' : storageStatus?.storage_version === 0 ? 'Đang lưu dữ liệu nội bộ trên thiết bị.' : 'Dữ liệu vẫn ở bảng cũ. Cần cập nhật kết nối và chuyển đổi một lần để bật lưu trữ theo năm.'}
+        </p>
+        {storageStatus?.migration_pending && <p className="text-xs text-amber-700">Chuyển đổi chưa hoàn tất. Tiếp tục chuyển đổi trước khi nhập thêm giao dịch.</p>}
+        {storageStatus?.backup_url && <a href={storageStatus.backup_url} target="_blank" rel="noreferrer" className="text-xs text-emerald-700 underline">Mở bản sao lưu trước chuyển đổi</a>}
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-slate-600" htmlFor="rebuild-year">Năm</label>
+          <input id="rebuild-year" type="number" min="1900" max="9999" value={rebuildYear} onChange={e => setRebuildYear(Number(e.target.value))} className="w-24 p-2 border rounded-xl text-xs" />
+          <button onClick={rebuildReports} disabled={rebuilding || !storageStatus || storageStatus.api_version < 2} className="p-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 disabled:opacity-50">{rebuilding ? 'Đang tính...' : 'Tính lại báo cáo'}</button>
+        </div>
+        {maintenanceMessage && <p role="status" className="text-xs text-slate-600">{maintenanceMessage}</p>}
       </div>
 
       {/* Backup and Export Data */}

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
-import { DashboardSummary, Budget, Category } from '../types';
+import { DashboardSummary, Budget, Category, YearTotal } from '../types';
 import { formatCurrency, formatCompactCurrency } from '../utils/formatters';
 import { SetBudgetModal } from '../components/budgets/SetBudgetModal';
 import { 
@@ -39,40 +39,31 @@ export const ReportsPage: React.FC = () => {
   const [budgetCategoryId, setBudgetCategoryId] = useState<string>();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
+  const [yearTotals, setYearTotals] = useState<YearTotal[]>([]);
+  const [reportError, setReportError] = useState('');
+  const requestVersion = useRef(0);
   const loadData = async () => {
+    const version = ++requestVersion.current;
     try {
       setLoading(true);
-
-      // Determine previous month/year
-      let prevM = currentMonth - 1;
-      let prevY = currentYear;
-      if (prevM < 1) {
-        prevM = 12;
-        prevY = currentYear - 1;
-      }
-
-      const [curSum, pSum, bList, catList, trendList] = await Promise.all([
-        api.getDashboardSummary(currentYear, currentMonth),
-        api.getDashboardSummary(prevY, prevM),
-        api.getBudgets(currentYear, currentMonth),
-        api.getCategories(),
-        api.getMonthlyTrend(currentYear, 12, 12),
-      ]);
-
-      setSummary(curSum);
-      setPrevSummary(pSum);
-      setBudgets(bList);
-      setCategories(catList);
-      setYearlyTrend(trendList);
+      setReportError('');
+      const report = await api.getReportBundle(currentYear, currentMonth);
+      if (version !== requestVersion.current) return;
+      setSummary(report.summary);
+      setPrevSummary(report.previous);
+      setBudgets(report.budgets);
+      setCategories(report.categories);
+      setYearlyTrend(report.trend);
+      setYearTotals(report.years);
     } catch (err) {
-      console.error('Failed to load reports data', err);
+      if (version === requestVersion.current) setReportError(err instanceof Error ? err.message : 'Không thể tải báo cáo');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
-
   useEffect(() => {
-    loadData();
+    void loadData();
+    return () => { requestVersion.current++; };
   }, [currentMonth, currentYear]);
 
   const handlePrevMonth = () => {
@@ -118,6 +109,7 @@ export const ReportsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {reportError && <div role="alert" className="p-3 rounded-xl bg-rose-50 text-rose-700 text-xs">{reportError} <button className="underline" onClick={loadData}>Tải lại</button></div>}
       {/* Month Selector Bar */}
       <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
@@ -300,6 +292,16 @@ export const ReportsPage: React.FC = () => {
                 </div>
                 ))}
                 <p className="text-[10px] text-slate-400">Giá trị làm tròn đến nghìn đồng · 22tr325 = 22.325.000đ. Hai biểu đồ dùng chung thang đo.</p>
+              </div>
+
+              <div className="bg-white rounded-3xl p-4 border border-slate-200/80 space-y-3">
+                <h3 className="font-bold text-slate-800 text-xs">So sánh thu chi giữa các năm</h3>
+                <p className="text-[11px] text-slate-500">Tổng các giao dịch đã ghi của từng năm. Năm đang diễn ra chưa phải số liệu cả năm hoàn chỉnh.</p>
+                <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-500"><span>Năm</span><span className="text-right">Thu</span><span className="text-right">Chi</span></div>
+                {yearTotals.map(item => <button key={item.year} onClick={() => setCurrentYear(item.year)} className={`w-full text-left border-t border-slate-100 pt-2 space-y-1 ${item.year === currentYear ? 'font-bold' : ''}`}>
+                  <div className="grid grid-cols-3 gap-2 text-xs"><span>{item.year}</span><span className="text-emerald-700 text-right" title={formatCurrency(item.income)}>{formatCompactCurrency(item.income)}</span><span className="text-rose-600 text-right" title={formatCurrency(item.expense)}>{formatCompactCurrency(item.expense)}</span></div>
+                  <div className="h-1.5 rounded bg-slate-100 overflow-hidden"><div className="h-full bg-rose-400" style={{width: `${item.expense / Math.max(1, ...yearTotals.map(y => y.expense)) * 100}%`}} /></div>
+                </button>)}
               </div>
 
               {/* Category Breakdown (Donut Bar & List) */}

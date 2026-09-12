@@ -1,12 +1,13 @@
 {
   "name": "family-expense-manager",
   "private": true,
-  "version": "2.0.9",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:storage": "node tests/client-storage.mjs && node tests/budgets.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

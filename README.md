@@ -54,7 +54,7 @@ Xây dựng một ứng dụng web quản lý tài chính - chi tiêu gia đình
 
 ## 2. CẤU TRÚC CƠ SỞ DỮ LIỆU (GOOGLE SHEETS SCHEMA)
 
-Google Spreadsheet cơ sở dữ liệu gồm đúng **6 Sheet chuẩn hóa**:
+Google Spreadsheet có các bảng danh mục/cấu hình và dữ liệu giao dịch. Từ v2.1.0, sau chuyển đổi, chi tiết nằm trong `Transactions_YYYY`, báo cáo đọc `MonthlySummary`. Bảng `Transactions` gốc được giữ để đối chiếu, không dùng cho giao dịch mới.
 
 ### 2.1 Sheet `Transactions` (Quản lý thu chi)
 Lưu toàn bộ lịch sử các khoản thu và chi:
@@ -313,3 +313,35 @@ Nếu bạn có điều chỉnh logic backend hoặc muốn triển khai lại t
 3. Chọn **"Cài đặt ứng dụng"** (Install app) hoặc **"Thêm vào màn hình chính"**.
 
 Icon ứng dụng 3D sẽ xuất hiện ngay ngoài màn hình điện thoại, bấm mở toàn màn hình mượt mà như một ứng dụng native tải từ Store!
+
+
+## 9. Lưu trữ dài hạn và hiệu năng (v2.1.0)
+
+- `Transactions_YYYY`: tự tạo theo năm giao dịch. Lịch sử mặc định tải tháng được chọn, tối đa 100 giao dịch/lượt; tìm kiếm và bộ lọc được thực hiện trước phân trang. “Tất cả” đọc các năm từ mới về cũ cho tới đủ một trang. Các tổng hiển thị trong Lịch sử là tổng của các giao dịch đã tải.
+- `MonthlySummary`: 12 dòng/năm; tổng thu/chi, số giao dịch, tổng theo danh mục và thành viên (JSON). Báo cáo gộp tháng đang xem, tháng trước, 12 tháng và so sánh các năm trong một API. Khi bảng tổng hợp đã cập nhật, Báo cáo không đọc chi tiết năm cũ.
+- Thêm/sửa/xóa đánh dấu năm liên quan cần tính lại; lần đọc báo cáo tiếp theo tính lại các năm này, rồi dùng bảng tổng hợp. Tổng quan đọc thêm tối đa 10 kết quả giao dịch gần đây của tháng. Việc tính lại vẫn đọc chi tiết của năm bị ảnh hưởng, không có chỉ mục SQL trong Google Sheets.
+- Sửa ngày sang năm khác được ghi sang bảng đích và xóa mềm bản ở năm cũ. Ý định ghi được lưu trước; nếu bị gián đoạn, lần gọi API tiếp theo tiếp tục thao tác để tránh tính trùng hoặc mất giao dịch.
+- Danh mục/ngân sách dùng bộ nhớ đệm trong phiên tối đa 15 giây, hủy sau thay đổi. Không cache số tiền giao dịch lâu dài. Hai thiết bị nhận dữ liệu mới khi mở/tải lại màn hình; chưa có cập nhật đẩy thời gian thực.
+- Khi danh sách đang phân trang mà dữ liệu thay đổi, app yêu cầu tải lại thay vì ghép trang từ hai thời điểm khác nhau.
+
+### 9.1 Kích hoạt trên Google Apps Script
+
+1. Lưu bản sao mã backend đang chạy. Dán `apps-script/Code_AllInOne.gs` vào tệp mã chính, lưu.
+2. **Cập nhật deployment đang dùng lên phiên bản mới trước khi chuyển dữ liệu**, giữ nguyên URL. Trước chuyển đổi, backend mới vẫn đọc bảng Transactions cũ.
+3. Chạy `migrateToYearlyStorage` từ trình chỉnh sửa Apps Script. Hàm tạo bản sao toàn bộ spreadsheet trên Drive trước khi ghi bảng mới; kiểm tra ID/ngày/số tiền/thành viên, đối chiếu từng trường giao dịch và toàn bộ dữ liệu bằng SHA-256 rồi mới bật storage_version=2. Nguồn Transactions gốc không bị xóa.
+4. Nếu ngắt giữa chừng, chạy lại hàm. Bản sao lưu không tạo lặp; dữ liệu nguồn phải còn nguyên và bản sao theo năm phải khớp. Nếu không khớp, hàm dừng thay vì ghi đè. Nếu còn trạng thái chuyển đổi dở, nhập giao dịch qua API được tạm chặn để bảo vệ nguồn.
+5. Hàm onEdit gắn với bảng tính đánh dấu báo cáo cần tính lại khi sửa trực tiếp, không cần cấp quyền Drive hoặc quyền tạo trigger bổ sung. App cũng kiểm tra số dòng của từng năm để phát hiện thêm/xóa dòng. Khi sửa ngày sang năm khác trực tiếp trong bảng, trigger chuyển giao dịch sang năm tương ứng. Trigger không chạy tức thời; nếu cần đối chiếu ngay, dùng Cài đặt → Tính lại báo cáo cho năm liên quan.
+6. Kiểm tra Cài đặt hiển thị “Đang lưu giao dịch theo năm”, mở bản sao lưu, kiểm tra Tổng quan và Báo cáo khớp số tiền trước chuyển đổi.
+
+Không chỉnh bảng `Transactions` gốc sau chuyển đổi vì đây là bản đối chiếu. Không chỉnh tay MonthlySummary. Việc thay đổi bằng API ngoài ứng dụng có thể không kích hoạt trigger Google; phải dùng Tính lại báo cáo. Đổi cấu trúc cột, ID hoặc thành viên không hợp lệ sẽ làm kiểm tra dữ liệu báo lỗi, cần sửa dữ liệu gốc trước khi tính lại. Giữ mã ID duy nhất, không sao chép giao dịch thành dòng mới bằng tay.
+
+### 9.2 Sao lưu và phục hồi
+
+- Link bản sao trước chuyển đổi được lưu trong Script Properties và hiển thị trong Cài đặt.
+- Nút JSON khi kết nối Sheets xuất dữ liệu Sheets thực tế; không xuất nhầm LocalStorage. CSV xuất giao dịch còn hiệu lực ở mọi năm. Xuất toàn bộ là thao tác chủ động có thể đọc nhiều dữ liệu, không diễn ra khi mở app.
+- Nhập JSON chỉ dành cho chế độ nội bộ. Với Sheets, phục hồi từ bản sao Drive và liên kết lại backend; không nhập đè dữ liệu cloud bằng thao tác nhập nội bộ.
+- Không hạ deployment xuống mã cũ sau khi đã chuyển dữ liệu: mã cũ chỉ biết bảng Transactions và sẽ bỏ sót giao dịch mới theo năm. Nếu cần phục hồi, dùng bản sao đầy đủ hoặc sửa backend mới.
+
+### 9.3 Kiểm tra
+
+Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô phỏng SpreadsheetApp/PropertiesService/LockService trên 30.000 giao dịch trong 7 năm, kiểm tra chuyển đổi lặp, lỗi ghi giữa chừng, chuyển năm, xóa mềm, dữ liệu cũ, dấu thời gian, phân trang và số lần đọc bảng. Thời gian đo trong test là trên máy, **không phải benchmark mạng hoặc máy chủ Google**. Bộ kiểm thử client xác nhận API mới dùng một gói báo cáo, backend cũ chỉ gọi chi tiết một lần thay vì 14 lần, và chế độ nội bộ vẫn hoạt động.

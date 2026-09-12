@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../api/client';
 import { Transaction, Category, TransactionType } from '../types';
-import { formatCurrency, formatDate, formatTransactionTime } from '../utils/formatters';
+import { formatCurrency, formatDate, formatTransactionTime, getMonthRange } from '../utils/formatters';
 import { EditTransactionModal } from '../components/transactions/EditTransactionModal';
 import { 
   Search, 
@@ -35,63 +35,62 @@ export const TransactionsPage: React.FC = () => {
   // Editing state
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
-  const loadData = async () => {
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const requestVersion = useRef(0);
+  const loadData = async (append = false) => {
+    const version = ++requestVersion.current;
     try {
       setLoading(true);
-      const [txList, catList] = await Promise.all([
-        api.getTransactions(),
+      setLoadError('');
+      const [page, catList] = await Promise.all([
+        api.getTransactionPage({
+          ...(allTime ? {} : getMonthRange(selectedYear, selectedMonth)),
+          type: filterType === 'all' ? undefined : filterType,
+          member_id: selectedMember === 'all' ? undefined : selectedMember,
+          category_id: selectedCategory === 'all' ? undefined : selectedCategory,
+          search: searchNote.trim(), limit: 100, cursor: append ? nextCursor : null,
+        }),
         api.getCategories(),
       ]);
-      setTransactions(txList);
+      if (version !== requestVersion.current) return;
+      setTransactions(previous => append ? [...previous, ...page.items] : page.items);
+      setNextCursor(page.next_cursor);
       setCategories(catList);
     } catch (err) {
-      console.error('Failed to load transactions', err);
+      if (version !== requestVersion.current) return;
+      setLoadError(err instanceof Error ? err.message : 'Không thể tải giao dịch');
+      // Do not mix previous pages with a changed dataset.
+      setNextCursor(null);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    requestVersion.current++;
+    setLoading(true);
+    setTransactions([]);
+    setNextCursor(null);
+    const timer = window.setTimeout(() => { void loadData(); }, 250);
+    return () => { window.clearTimeout(timer); requestVersion.current++; };
+  }, [selectedYear, selectedMonth, allTime, filterType, selectedMember, selectedCategory, searchNote]);
 
   const handleSaveTransaction = async (id: string, updated: Partial<Transaction>) => {
-    await api.updateTransaction(id, updated);
+    await api.updateTransaction(id, updated, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
     await loadData();
   };
 
   const handleDeleteTransaction = async (id: string) => {
-    await api.deleteTransaction(id);
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    await api.deleteTransaction(id, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
+    await loadData();
   };
 
-  const getCategory = (catId: string) => {
-    return categories.find((c) => c.id === catId);
-  };
-
-  // Filter transactions
-  const monthPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-  const filtered = transactions.filter((tx) => {
-    if (!allTime && !tx.date.startsWith(monthPrefix)) return false;
-    if (filterType !== 'all' && tx.type !== filterType) return false;
-    if (selectedMember !== 'all' && tx.member_id !== selectedMember) return false;
-    if (selectedCategory !== 'all' && tx.category_id !== selectedCategory) return false;
-    if (searchNote.trim()) {
-      const q = searchNote.toLowerCase().trim();
-      const noteMatch = tx.note?.toLowerCase().includes(q);
-      const catMatch = getCategory(tx.category_id)?.name.toLowerCase().includes(q);
-      if (!noteMatch && !catMatch) return false;
-    }
-    return true;
-  });
-
-  // Calculate totals for currently filtered view
-  const totalIncome = filtered
-    .filter((t) => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = filtered
-    .filter((t) => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const getCategory = (catId: string) => categories.find((c) => c.id === catId);
+  const filtered = transactions;
+  // Totals refer explicitly to the loaded records, never to unseen pages.
+  const totalIncome = filtered.filter(t => t.type === 'income').reduce((sum,t) => sum+t.amount,0);
+  const totalExpense = filtered.filter(t => t.type === 'expense').reduce((sum,t) => sum+t.amount,0);
 
   // Group by date
   const groupedByDate: Record<string, Transaction[]> = {};
@@ -124,6 +123,7 @@ export const TransactionsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {loadError && <div role="alert" className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs">{loadError} <button className="underline" onClick={() => loadData()}>Tải lại</button></div>}
       {/* Month Navigator */}
       <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-1.5">
@@ -266,7 +266,7 @@ export const TransactionsPage: React.FC = () => {
       </div>
 
       {/* Transaction List grouped by date */}
-      {loading ? (
+      {loading && transactions.length === 0 ? (
         <div className="py-12 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="w-8 h-8 animate-spin mb-2 text-emerald-600" />
           <p className="text-sm">Đang tải danh sách giao dịch...</p>
@@ -370,6 +370,10 @@ export const TransactionsPage: React.FC = () => {
         </div>
       )}
 
+      <div className="text-center space-y-2">
+        <p className="text-[11px] text-slate-500">Tổng Thu / Chi và tổng theo ngày ở trên tính trên {transactions.length} giao dịch đã tải.</p>
+        {nextCursor && <button disabled={loading} onClick={() => loadData(true)} className="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold disabled:opacity-50">{loading ? 'Đang tải...' : 'Xem thêm 100 giao dịch'}</button>}
+      </div>
       {/* Edit Transaction Modal */}
       <EditTransactionModal
         transaction={editingTx}

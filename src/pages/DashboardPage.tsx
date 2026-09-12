@@ -81,12 +81,12 @@ export const DashboardPage: React.FC = () => {
   const isCurrentMonthView = currentMonth === currentActualMonth && currentYear === currentActualYear;
 
   const handleSaveTransaction = async (id: string, updated: Partial<Transaction>) => {
-    await api.updateTransaction(id, updated);
+    await api.updateTransaction(id, updated, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
     await loadData();
   };
 
   const handleDeleteTransaction = async (id: string) => {
-    await api.deleteTransaction(id);
+    await api.deleteTransaction(id, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
     await loadData();
   };
 

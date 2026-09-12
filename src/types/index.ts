@@ -97,3 +97,16 @@ export interface DashboardSummary {
   }[];
   recent_transactions: Transaction[];
 }
+
+export interface TransactionQuery {
+  from?: string; through?: string; type?: string; member_id?: string; category_id?: string;
+  search?: string; cursor?: string | null; limit?: number;
+}
+export interface TransactionPage { items: Transaction[]; next_cursor: string | null; }
+export interface YearTotal { year: number; income: number; expense: number; balance: number; }
+export interface ReportBundle {
+  summary: DashboardSummary; previous: DashboardSummary; categories: Category[]; budgets: Budget[];
+  trend: (YearTotal & { month: number; label: string })[];
+  years: YearTotal[];
+}
+export interface StorageStatus { api_version: number; storage_version: number; backup_url?: string; migration_pending?: boolean; }
