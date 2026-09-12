@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { DashboardSnapshot, DASHBOARD_REVISION_KEY } from '../utils/dashboardCache';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { DashboardSummary, Transaction, Category } from '../types';
+import { Transaction } from '../types';
 import { formatCurrency, formatTransactionDateTime } from '../utils/formatters';
 import { EditTransactionModal } from '../components/transactions/EditTransactionModal';
 import { 
@@ -22,8 +23,7 @@ import {
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
+
   
   // Date selection
   const now = new Date();
@@ -32,27 +32,47 @@ export const DashboardPage: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(currentActualMonth);
   const [currentYear, setCurrentYear] = useState(currentActualYear);
 
-  // Edit modal
+  const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(() => api.getCachedDashboard(currentYear, currentMonth));
+  const summary = snapshot?.summary.year === currentYear && snapshot.summary.month === currentMonth ? snapshot.summary : null;
+  const categories = summary ? snapshot!.categories : [];
+  const [syncError, setSyncError] = useState('');
+  const requestVersion = useRef(0);
+  const refreshing = useRef(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
-  const loadData = async () => {
+  const loadData = async (saved = false) => {
+    const version = ++requestVersion.current;
+    refreshing.current = true;
+    setLoading(true);
+    setSyncError('');
     try {
-      setLoading(true);
-      const [data, catList] = await Promise.all([
-        api.getDashboardSummary(currentYear, currentMonth),
-        api.getCategories(),
-      ]);
-      setSummary(data);
-      setCategories(catList);
+      const fresh = await api.getDashboardSnapshot(currentYear, currentMonth);
+      if (version === requestVersion.current) setSnapshot(fresh);
     } catch (err) {
-      console.error('Failed to load dashboard', err);
+      if (version === requestVersion.current) setSyncError(saved
+        ? 'Đã lưu giao dịch, chưa cập nhật được báo cáo. Bấm cập nhật để lấy số mới.'
+        : err instanceof Error ? err.message : 'Chưa cập nhật được số liệu.');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) { setLoading(false); refreshing.current = false; }
     }
   };
 
   useEffect(() => {
-    loadData();
+    setSnapshot(api.getCachedDashboard(currentYear, currentMonth));
+    void loadData();
+    const resume = () => { if (document.visibilityState === 'visible' && !refreshing.current) void loadData(); };
+    const changed = (event: StorageEvent) => {
+      if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); }
+    };
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('storage', changed);
+    return () => {
+      requestVersion.current++;
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('storage', changed);
+    };
   }, [currentMonth, currentYear]);
 
   const handlePrevMonth = () => {
@@ -82,12 +102,12 @@ export const DashboardPage: React.FC = () => {
 
   const handleSaveTransaction = async (id: string, updated: Partial<Transaction>) => {
     await api.updateTransaction(id, updated, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
-    await loadData();
+    await loadData(true);
   };
 
   const handleDeleteTransaction = async (id: string) => {
     await api.deleteTransaction(id, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
-    await loadData();
+    await loadData(true);
   };
 
   const getCategoryName = (catId: string) => {
@@ -137,7 +157,14 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {loading ? (
+      <div className="flex items-start justify-between gap-2 text-[11px] text-slate-500 px-1" role="status" aria-live="polite">
+        <div>
+          <p className={syncError ? 'text-amber-700' : ''}>{syncError || (loading ? (summary ? 'Đang cập nhật · đang hiển thị bản đã lưu trên máy' : 'Đang lấy dữ liệu mới từ Google Sheets…') : api.isLiveMode() ? 'Đã cập nhật từ Google Sheets' : 'Dữ liệu nội bộ trên thiết bị')}</p>
+          {summary && snapshot && <p>Lần cập nhật: {new Intl.DateTimeFormat('vi-VN', {dateStyle:'short',timeStyle:'short',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(snapshot.savedAt)}</p>}
+        </div>
+        <button disabled={loading} onClick={() => loadData()} className="shrink-0 text-emerald-700 font-semibold disabled:opacity-50">{loading ? 'Đang tải…' : 'Cập nhật'}</button>
+      </div>
+      {loading && !summary ? (
         <div className="py-14 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="w-8 h-8 animate-spin mb-2 text-emerald-600" />
           <p className="text-xs">Đang cập nhật số liệu thu chi...</p>

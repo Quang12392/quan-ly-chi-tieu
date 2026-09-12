@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom';
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../api/client';
 import { Transaction, Category, TransactionType } from '../types';
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export const TransactionsPage: React.FC = () => {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -77,14 +79,34 @@ export const TransactionsPage: React.FC = () => {
     return () => { window.clearTimeout(timer); requestVersion.current++; };
   }, [selectedYear, selectedMonth, allTime, filterType, selectedMember, selectedCategory, searchNote]);
 
+  const [savedNotice, setSavedNotice] = useState('');
+  const [savedReportDate, setSavedReportDate] = useState<string | null>(null);
+  const [refreshingReport, setRefreshingReport] = useState(false);
+  const refreshSavedReport = async (date: string) => {
+    setRefreshingReport(true);
+    setSavedReportDate(null);
+    setSavedNotice('Đã lưu giao dịch. Đang cập nhật báo cáo từ máy chủ…');
+    try {
+      await api.getDashboardSnapshot(Number(date.slice(0,4)), Number(date.slice(5,7)));
+      setSavedNotice('Đã lưu giao dịch và cập nhật báo cáo từ máy chủ.');
+    } catch {
+      setSavedNotice('Đã lưu giao dịch, chưa cập nhật được báo cáo.');
+      setSavedReportDate(date);
+    } finally { setRefreshingReport(false); }
+  };
+  useEffect(() => {
+    const date = (location.state as {savedDate?: string} | null)?.savedDate;
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) void refreshSavedReport(date);
+  }, [location.key]);
+
   const handleSaveTransaction = async (id: string, updated: Partial<Transaction>) => {
     await api.updateTransaction(id, updated, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
-    await loadData();
+    await Promise.all([loadData(), refreshSavedReport(updated.date || editingTx?.date || `${selectedYear}-${String(selectedMonth).padStart(2,'0')}-01`)]);
   };
 
   const handleDeleteTransaction = async (id: string) => {
     await api.deleteTransaction(id, editingTx ? Number(editingTx.date.slice(0,4)) : undefined);
-    await loadData();
+    await Promise.all([loadData(), refreshSavedReport(editingTx?.date || `${selectedYear}-${String(selectedMonth).padStart(2,'0')}-01`)]);
   };
 
   const getCategory = (catId: string) => categories.find((c) => c.id === catId);
@@ -124,6 +146,9 @@ export const TransactionsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {savedNotice && <div role="status" className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-xs">
+        {savedNotice} {savedReportDate && <button disabled={refreshingReport} className="underline font-semibold" onClick={() => refreshSavedReport(savedReportDate)}>Cập nhật báo cáo</button>}
+      </div>}
       {loadError && <div role="alert" className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs">{loadError} <button className="underline" onClick={() => loadData()}>Tải lại</button></div>}
       {/* Month Navigator */}
       <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-2xl border border-slate-200/80 shadow-xs">

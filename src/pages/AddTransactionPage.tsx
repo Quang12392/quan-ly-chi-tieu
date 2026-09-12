@@ -74,6 +74,7 @@ export const AddTransactionPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting || success) return;
     setErrorMsg('');
 
     const parsedAmount = parseCurrencyInput(amountStr);
@@ -101,7 +102,7 @@ export const AddTransactionPage: React.FC = () => {
 
       setSuccess(true);
       setTimeout(() => {
-        navigate('/transactions');
+        navigate('/transactions', { state: { savedDate: date } });
       }, 400);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Không thể lưu giao dịch. Vui lòng thử lại.');

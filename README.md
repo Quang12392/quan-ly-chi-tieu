@@ -321,7 +321,7 @@ Icon ứng dụng 3D sẽ xuất hiện ngay ngoài màn hình điện thoại, 
 - `MonthlySummary`: 12 dòng/năm; tổng thu/chi, số giao dịch, tổng theo danh mục và thành viên (JSON). Báo cáo gộp tháng đang xem, tháng trước, 12 tháng và so sánh các năm trong một API. Khi bảng tổng hợp đã cập nhật, Báo cáo không đọc chi tiết năm cũ.
 - Thêm/sửa/xóa đánh dấu năm liên quan cần tính lại; lần đọc báo cáo tiếp theo tính lại các năm này, rồi dùng bảng tổng hợp. Tổng quan đọc thêm tối đa 10 kết quả giao dịch gần đây của tháng. Việc tính lại vẫn đọc chi tiết của năm bị ảnh hưởng, không có chỉ mục SQL trong Google Sheets.
 - Sửa ngày sang năm khác được ghi sang bảng đích và xóa mềm bản ở năm cũ. Ý định ghi được lưu trước; nếu bị gián đoạn, lần gọi API tiếp theo tiếp tục thao tác để tránh tính trùng hoặc mất giao dịch.
-- Danh mục/ngân sách dùng bộ nhớ đệm trong phiên tối đa 15 giây, hủy sau thay đổi. Không cache số tiền giao dịch lâu dài. Hai thiết bị nhận dữ liệu mới khi mở/tải lại màn hình; chưa có cập nhật đẩy thời gian thực.
+- Danh mục/ngân sách dùng bộ nhớ đệm trong phiên tối đa 15 giây, hủy sau thay đổi. Bản xem trước Tổng quan được lưu trên thiết bị theo mục 9.4, luôn ghi rõ trạng thái và cập nhật lại khi mở. Hai thiết bị nhận dữ liệu mới khi mở/tải lại màn hình; chưa có cập nhật đẩy thời gian thực.
 - Khi danh sách đang phân trang mà dữ liệu thay đổi, app yêu cầu tải lại thay vì ghép trang từ hai thời điểm khác nhau.
 
 ### 9.1 Kích hoạt trên Google Apps Script
@@ -346,3 +346,14 @@ Không chỉnh bảng `Transactions` gốc sau chuyển đổi vì đây là b�
 ### 9.3 Kiểm tra
 
 Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô phỏng SpreadsheetApp/PropertiesService/LockService trên 30.000 giao dịch trong 7 năm, kiểm tra chuyển đổi lặp, lỗi ghi giữa chừng, chuyển năm, xóa mềm, dữ liệu cũ, dấu thời gian, phân trang và số lần đọc bảng. Thời gian đo trong test là trên máy, **không phải benchmark mạng hoặc máy chủ Google**. Bộ kiểm thử client xác nhận API mới dùng một gói báo cáo, backend cũ chỉ gọi chi tiết một lần thay vì 14 lần, và chế độ nội bộ vẫn hoạt động.
+
+
+### 9.4 Mở nhanh Tổng quan (v2.1.3)
+
+- Tổng quan gọi trực tiếp một API trả số liệu và danh mục, bỏ yêu cầu kiểm tra storageStatus trước và bỏ yêu cầu danh mục riêng trên backend mới.
+- Lưu tối đa 6 bản xem trước theo tháng trên thiết bị, tách theo URL kết nối và thành viên đăng nhập. Mở lại đúng tháng sẽ hiển thị bản gần nhất ngay trong lúc tải số liệu mới, kèm trạng thái “Đang cập nhật” và thời điểm cập nhật. Lần đầu hoặc tháng chưa có bản lưu vẫn chờ mạng.
+- Bản lưu chỉ dùng để hiển thị, không bao giờ gửi thay thế dữ liệu Google Sheets. Thêm/sửa/xóa giao dịch hoặc thay ngân sách vô hiệu hóa bản lưu. Đăng xuất, đổi kết nối cũng xóa bản lưu; phản hồi đọc bắt đầu trước một thao tác ghi không được ghi lại vào cache.
+- Sau khi thêm giao dịch, Lịch sử lấy lại dữ liệu và cập nhật Tổng quan từ máy chủ. Nếu lưu đã thành công nhưng đọc báo cáo thất bại, hiển thị “Đã lưu giao dịch, chưa cập nhật được báo cáo”; nút cập nhật chỉ gửi yêu cầu đọc, không gửi lại giao dịch.
+- Khi quay lại app từ nền hoặc có mạng trở lại, Tổng quan cập nhật ngầm. Không phải đồng bộ đẩy thời gian thực: giao dịch vừa nhập trên máy còn lại có thể chưa hiện trên bản xem trước cho đến khi tải xong. Luôn có nút Cập nhật và thời điểm đồng bộ để người dùng nhận biết.
+- Yêu cầu đọc có giới hạn chờ 20 giây; ghi 45 giây. Nếu ghi hết thời gian chờ, kết quả có thể đã được ghi ở máy chủ: app yêu cầu kiểm tra Lịch sử trước khi lưu lại và không tự gửi lại giao dịch.
+- Chạy `npm run test:startup` để kiểm tra một yêu cầu mở Tổng quan, phân tách cache, hai máy nhập nối tiếp, đọc cũ hoàn tất sau ghi, lỗi mạng, timeout và bộ nhớ trình duyệt đầy.

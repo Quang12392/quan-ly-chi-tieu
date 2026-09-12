@@ -1,3 +1,4 @@
+import { DashboardSnapshot, clearDashboardCache, dashboardRevision, readDashboardCache, writeDashboardCache, validDashboard } from '../utils/dashboardCache';
 import { summarizeTransactions } from '../utils/summary';
 import { TransactionQuery, TransactionPage, ReportBundle, StorageStatus } from '../types';
 import { resolveBudgets } from '../utils/budgets';
@@ -33,7 +34,7 @@ const STORAGE_KEYS = {
 
 class ApiClient {
   private metadata = new Map<string, { expires: number; value: Promise<unknown> }>();
-  private invalidate() { this.metadata.clear(); }
+  private invalidate() { this.metadata.clear(); clearDashboardCache(); }
   private memo<T>(key: string, loader: () => Promise<T>, ttl = 15000): Promise<T> {
     const fullKey = this.getApiUrl() + key;
     const old = this.metadata.get(fullKey);
@@ -120,10 +121,14 @@ class ApiClient {
       throw new Error('Chưa cấu hình URL Google Apps Script');
     }
 
+    const write = /^(create|update|delete|save|rebuild)/.test(action);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), write ? 45000 : 20000);
     try {
       // Use text/plain to avoid CORS preflight OPTIONS check in Google Apps Script
       const response = await fetch(url, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'text/plain;charset=utf-8',
         },
@@ -141,9 +146,13 @@ class ApiClient {
 
       return res.data as T;
     } catch (err: unknown) {
+      if (controller.signal.aborted) throw new Error(write
+        ? 'Chưa xác nhận được kết quả lưu. Hãy kiểm tra Lịch sử giao dịch trước khi thử lưu lại.'
+        : 'Google Sheets phản hồi quá lâu. Vui lòng thử cập nhật lại.');
       const msg = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
       throw new Error(msg);
     } finally {
+      clearTimeout(timeout);
       if (/^(create|update|delete|save|rebuild)/.test(action)) this.invalidate();
     }
   }
@@ -280,6 +289,39 @@ class ApiClient {
     list[index].updated_at = new Date().toISOString();
     this.setLocal(STORAGE_KEYS.TRANSACTIONS, list);
     return true;
+  }
+
+  private dashboardScope(): string {
+    return JSON.stringify([this.getApiUrl() || 'local', localStorage.getItem('family_auth_session') || '']);
+  }
+  getCachedDashboard(year: number, month: number): DashboardSnapshot | null {
+    return readDashboardCache(this.dashboardScope(), year, month);
+  }
+  async getDashboardSnapshot(year: number, month: number): Promise<DashboardSnapshot> {
+    const scope = this.dashboardScope(), revision = dashboardRevision();
+    let summary: DashboardSummary;
+    let categories: Category[];
+    if (this.isLiveMode()) {
+      // Modern backend returns everything in one response; no status probe first.
+      const result = await this.requestGAS<DashboardSummary & { categories?: Category[] }>('getDashboardSummary', {year, month});
+      summary = result;
+      if (Array.isArray(result.categories)) categories = result.categories;
+      else {
+        // Keep compatibility with the older backend without a separate capability request.
+        const [cats, budgets] = await Promise.all([this.getCategories(), this.getBudgets(year, month)]);
+        categories = cats;
+        const total = budgets.reduce((sum,b) => sum+b.amount,0);
+        summary = {...result, budget_summary:{total_budget:total,total_spent:result.total_expense,remaining:Math.max(0,total-result.total_expense),percentage:total?Math.round(result.total_expense/total*100):0}};
+      }
+    } else {
+      [summary, categories] = await Promise.all([this.getDashboardSummary(year, month), this.getCategories()]);
+    }
+    if (!validDashboard(summary) || summary.year !== year || summary.month !== month) throw new Error('Số liệu Tổng quan không hợp lệ. Vui lòng cập nhật lại.');
+    // Never publish a read that started before a write, logout, or connection change.
+    if (scope !== this.dashboardScope() || revision !== dashboardRevision()) throw new Error('Dữ liệu vừa thay đổi. Vui lòng cập nhật lại.');
+    const snapshot = {summary,categories,savedAt:Date.now()};
+    writeDashboardCache(scope,snapshot);
+    return snapshot;
   }
 
   async getDashboardSummary(year: number, month: number): Promise<DashboardSummary> {
@@ -598,6 +640,7 @@ class ApiClient {
     budgets?: Budget[];
     settings?: AppSettings;
   }): Promise<{ transactionsCount: number; categoriesCount: number; budgetsCount: number }> {
+    this.invalidate();
     if (this.isLiveMode()) throw new Error('Nhập JSON chỉ áp dụng cho dữ liệu nội bộ. Dữ liệu Google Sheets cần khôi phục từ bản sao lưu trên Drive.');
     if (!data || typeof data !== 'object') {
       throw new Error('Định dạng file JSON không hợp lệ');

@@ -1,3 +1,4 @@
+import { clearDashboardCache } from '../utils/dashboardCache';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 interface AuthContextType {
@@ -38,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    clearDashboardCache();
     setCurrentUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
   };
