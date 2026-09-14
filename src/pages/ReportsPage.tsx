@@ -1,4 +1,4 @@
-import { PageSnapshot, DASHBOARD_REVISION_KEY } from '../utils/dashboardCache';
+import { PageSnapshot, DASHBOARD_REVISION_KEY, isPreviewFresh } from '../utils/dashboardCache';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
 import { ReportBundle } from '../types';
@@ -60,9 +60,18 @@ export const ReportsPage: React.FC = () => {
     }
   };
   useEffect(() => {
-    setSnapshot(api.getCachedReport(currentYear,currentMonth));
-    void loadData();
-    const resume = () => { if (document.visibilityState === 'visible' && !refreshing.current) void loadData(); };
+    const cached = api.getCachedReport(currentYear,currentMonth);
+    setSnapshot(cached);
+    if (isPreviewFresh(cached?.savedAt)) {
+      setLoading(false);
+      refreshing.current = false;
+    } else {
+      void loadData();
+    }
+    const resume = () => {
+      const latest = api.getCachedReport(currentYear,currentMonth);
+      if (document.visibilityState === 'visible' && !refreshing.current && !isPreviewFresh(latest?.savedAt)) void loadData();
+    };
     const changed = (event: StorageEvent) => { if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); } };
     window.addEventListener('online',resume);
     document.addEventListener('visibilitychange',resume);

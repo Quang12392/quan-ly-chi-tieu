@@ -1,4 +1,4 @@
-import { DashboardSnapshot, DASHBOARD_REVISION_KEY } from '../utils/dashboardCache';
+import { DashboardSnapshot, DASHBOARD_REVISION_KEY, isPreviewFresh } from '../utils/dashboardCache';
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
@@ -58,9 +58,18 @@ export const DashboardPage: React.FC = () => {
   };
 
   useEffect(() => {
-    setSnapshot(api.getCachedDashboard(currentYear, currentMonth));
-    void loadData();
-    const resume = () => { if (document.visibilityState === 'visible' && !refreshing.current) void loadData(); };
+    const cached = api.getCachedDashboard(currentYear, currentMonth);
+    setSnapshot(cached);
+    if (isPreviewFresh(cached?.savedAt)) {
+      setLoading(false);
+      refreshing.current = false;
+    } else {
+      void loadData();
+    }
+    const resume = () => {
+      const latest = api.getCachedDashboard(currentYear, currentMonth);
+      if (document.visibilityState === 'visible' && !refreshing.current && !isPreviewFresh(latest?.savedAt)) void loadData();
+    };
     const changed = (event: StorageEvent) => {
       if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); }
     };

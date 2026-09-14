@@ -1,4 +1,4 @@
-import { PageSnapshot, DASHBOARD_REVISION_KEY } from '../utils/dashboardCache';
+import { PageSnapshot, DASHBOARD_REVISION_KEY, isPreviewFresh } from '../utils/dashboardCache';
 import { useLocation } from 'react-router-dom';
 import React, { useEffect, useState, useRef } from 'react';
 import { api } from '../api/client';
@@ -81,16 +81,26 @@ export const TransactionsPage: React.FC = () => {
     requestVersion.current++;
     const cached = api.getCachedTransactions(query);
     setSnapshot(cached ? {...cached,key:queryKey,fresh:false} : null);
-    setLoading(true);
-    refreshing.current = true;
-    const timer = window.setTimeout(() => { void loadData(); }, 250);
-    const resume = () => { if (document.visibilityState === 'visible' && !refreshing.current) void loadData(); };
+    let timer: number | undefined;
+    if (isPreviewFresh(cached?.savedAt)) {
+      setLoading(false);
+      refreshing.current = false;
+    } else {
+      setLoading(true);
+      refreshing.current = true;
+      timer = window.setTimeout(() => { void loadData(); }, 250);
+    }
+    const resume = () => {
+      const latest = api.getCachedTransactions(query);
+      if (document.visibilityState === 'visible' && !refreshing.current && !isPreviewFresh(latest?.savedAt)) void loadData();
+    };
     const changed = (event: StorageEvent) => { if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); } };
     window.addEventListener('online',resume);
     document.addEventListener('visibilitychange',resume);
     window.addEventListener('storage',changed);
     return () => {
-      window.clearTimeout(timer); requestVersion.current++;
+      if (timer !== undefined) window.clearTimeout(timer);
+      requestVersion.current++;
       window.removeEventListener('online',resume);
       document.removeEventListener('visibilitychange',resume);
       window.removeEventListener('storage',changed);

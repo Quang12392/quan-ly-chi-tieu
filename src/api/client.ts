@@ -35,7 +35,8 @@ const STORAGE_KEYS = {
 
 class ApiClient {
   private metadata = new Map<string, { expires: number; value: Promise<unknown> }>();
-  private invalidate() { this.metadata.clear(); clearDashboardCache(); }
+  private pendingReads = new Map<string, Promise<unknown>>();
+  private invalidate() { this.metadata.clear(); this.pendingReads.clear(); clearDashboardCache(); }
   private memo<T>(key: string, loader: () => Promise<T>, ttl = 15000): Promise<T> {
     const fullKey = this.getApiUrl() + key;
     const old = this.metadata.get(fullKey);
@@ -172,39 +173,50 @@ class ApiClient {
     }
 
     const write = /^(create|update|delete|save|rebuild)/.test(action);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), write ? 45000 : 20000);
-    try {
-      // Use text/plain to avoid CORS preflight OPTIONS check in Google Apps Script
-      const response = await fetch(url, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify({ action, payload }),
-      });
+    const execute = async (): Promise<T> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), write ? 45000 : 20000);
+      try {
+        // Use text/plain to avoid CORS preflight OPTIONS check in Google Apps Script
+        const response = await fetch(url, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: JSON.stringify({ action, payload }),
+        });
 
-      if (!response.ok) {
-        throw new Error(`Lỗi kết nối máy chủ: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          throw new Error(`Lỗi kết nối máy chủ: ${response.status} ${response.statusText}`);
+        }
+
+        const res = await response.json();
+        if (!res.ok) {
+          throw new Error(`${res.error?.code || 'SERVER_ERROR'}: ${res.error?.message || 'Có lỗi xảy ra khi xử lý dữ liệu'}`);
+        }
+
+        return res.data as T;
+      } catch (err: unknown) {
+        if (controller.signal.aborted) throw new Error(write
+          ? 'Chưa xác nhận được kết quả lưu. Hãy kiểm tra Lịch sử giao dịch trước khi thử lưu lại.'
+          : 'Google Sheets phản hồi quá lâu. Vui lòng thử cập nhật lại.');
+        const msg = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
+        throw new Error(msg);
+      } finally {
+        clearTimeout(timeout);
+        if (write) this.invalidate();
       }
+    };
 
-      const res = await response.json();
-      if (!res.ok) {
-        throw new Error(`${res.error?.code || 'SERVER_ERROR'}: ${res.error?.message || 'Có lỗi xảy ra khi xử lý dữ liệu'}`);
-      }
-
-      return res.data as T;
-    } catch (err: unknown) {
-      if (controller.signal.aborted) throw new Error(write
-        ? 'Chưa xác nhận được kết quả lưu. Hãy kiểm tra Lịch sử giao dịch trước khi thử lưu lại.'
-        : 'Google Sheets phản hồi quá lâu. Vui lòng thử cập nhật lại.');
-      const msg = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
-      throw new Error(msg);
-    } finally {
-      clearTimeout(timeout);
-      if (/^(create|update|delete|save|rebuild)/.test(action)) this.invalidate();
-    }
+    if (write) return execute();
+    const readKey = `${url}\n${action}\n${JSON.stringify(payload)}`;
+    const pending = this.pendingReads.get(readKey);
+    if (pending) return pending as Promise<T>;
+    const request = execute();
+    this.pendingReads.set(readKey, request);
+    try { return await request; }
+    finally { if (this.pendingReads.get(readKey) === request) this.pendingReads.delete(readKey); }
   }
 
   // --- API METHODS ---

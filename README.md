@@ -354,7 +354,7 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Lưu tối đa 6 bản xem trước theo tháng trên thiết bị, tách theo URL kết nối và thành viên đăng nhập. Mở lại đúng tháng sẽ hiển thị bản gần nhất ngay trong lúc tải số liệu mới, kèm trạng thái “Đang cập nhật” và thời điểm cập nhật. Lần đầu hoặc tháng chưa có bản lưu vẫn chờ mạng.
 - Bản lưu chỉ dùng để hiển thị, không bao giờ gửi thay thế dữ liệu Google Sheets. Thêm/sửa/xóa giao dịch hoặc thay ngân sách vô hiệu hóa bản lưu. Đăng xuất, đổi kết nối cũng xóa bản lưu; phản hồi đọc bắt đầu trước một thao tác ghi không được ghi lại vào cache.
 - Sau khi thêm giao dịch, Lịch sử lấy lại dữ liệu và cập nhật Tổng quan từ máy chủ. Nếu lưu đã thành công nhưng đọc báo cáo thất bại, hiển thị “Đã lưu giao dịch, chưa cập nhật được báo cáo”; nút cập nhật chỉ gửi yêu cầu đọc, không gửi lại giao dịch.
-- Khi quay lại app từ nền hoặc có mạng trở lại, Tổng quan cập nhật ngầm. Không phải đồng bộ đẩy thời gian thực: giao dịch vừa nhập trên máy còn lại có thể chưa hiện trên bản xem trước cho đến khi tải xong. Luôn có nút Cập nhật và thời điểm đồng bộ để người dùng nhận biết.
+- Khi quay lại app từ nền hoặc có mạng trở lại, Tổng quan cập nhật ngầm nếu bản xem trước đã cũ ít nhất 60 giây. Không phải đồng bộ đẩy thời gian thực: giao dịch vừa nhập trên máy còn lại có thể chưa hiện trên bản xem trước cho đến khi tải xong. Luôn có nút Cập nhật và thời điểm đồng bộ để người dùng nhận biết.
 - Yêu cầu đọc có giới hạn chờ 20 giây; ghi 45 giây. Nếu ghi hết thời gian chờ, kết quả có thể đã được ghi ở máy chủ: app yêu cầu kiểm tra Lịch sử trước khi lưu lại và không tự gửi lại giao dịch.
 - Chạy `npm run test:startup` để kiểm tra một yêu cầu mở Tổng quan, phân tách cache, hai máy nhập nối tiếp, đọc cũ hoàn tất sau ghi, lỗi mạng, timeout và bộ nhớ trình duyệt đầy.
 
@@ -365,7 +365,7 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Bản xem trước được tách theo kết nối, thành viên, tháng và toàn bộ bộ lọc (ngày, loại thu/chi, thành viên, danh mục, tìm kiếm). Lưu tối đa 8 bản cho hai tab; lỗi/quota bộ nhớ không làm hỏng việc tải dữ liệu.
 - Giao dịch chỉ lưu trang đầu tối đa 100 kết quả. Không dùng con trỏ cũ để Xem thêm trước khi xác nhận lại trang đầu từ máy chủ; sau cập nhật thay thế danh sách cũ, không nối trùng trang.
 - Cùng vô hiệu hóa bản lưu với Tổng quan khi ghi dữ liệu, đổi kết nối, đăng xuất. Phản hồi đến muộn sau thao tác ghi không được lưu lại. Nếu tải mới thất bại, giữ bản xem trước cùng thông báo lỗi và nút thử lại.
-- Tự cập nhật khi mở tab, đổi tháng/bộ lọc, quay lại app từ nền hoặc có mạng trở lại. **Không có lịch đồng bộ 60 giây hay bất kỳ chu kỳ định kỳ nào.** Ô tìm kiếm chờ 250ms để giảm yêu cầu khi đang gõ; đây không phải lịch đồng bộ.
+- Tự cập nhật khi mở tab, đổi tháng/bộ lọc, quay lại app từ nền hoặc có mạng trở lại nếu chưa có bản xem trước hoặc bản đó đã cũ ít nhất 60 giây. **Không có lịch đồng bộ định kỳ.** Ô tìm kiếm chờ 250ms để giảm yêu cầu khi đang gõ.
 - Kiểm thử: `npm run test:pages`, `npm run test:startup`, `npm run test:storage`, `npm run build`.
 
 ### 9.6 Danh mục trong form Thêm giao dịch (v2.1.5)
@@ -380,3 +380,10 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Backend dùng `CacheService` của Apps Script cho danh mục và ngân sách trong 5 phút. Thay đổi qua ứng dụng xóa cache liên quan ngay; cache chỉ là lớp tăng tốc, Google Sheets vẫn là nguồn dữ liệu chính.
 - Phản hồi Tổng quan được cache tối đa 90 giây và Báo cáo tối đa 180 giây theo phiên bản dữ liệu cùng cấu trúc các bảng giao dịch. Thêm, sửa, xóa giao dịch, thay danh mục/ngân sách hoặc thay đổi trực tiếp trong bảng giao dịch làm đổi khóa cache; thêm/xóa dòng trực tiếp cũng được nhận biết qua số dòng.
 - Cache backend không loại bỏ hoàn toàn thời gian khởi động nguội của Google Apps Script, nhưng giảm số lần đọc Spreadsheet và cho phép các lần mở/cập nhật lặp lại trả kết quả nhanh hơn. Cache có thể bị Google thu hồi sớm; backend luôn tự đọc lại Sheet khi không có cache.
+
+### 9.8 Chống nghẽn khi chuyển tab liên tục (v2.1.7)
+
+- Tổng quan, Giao dịch và Báo cáo coi bản xem trước dưới 60 giây là còn mới. Chuyển qua lại giữa các tab trong khoảng này chỉ đọc dữ liệu trên thiết bị, không tạo thêm yêu cầu Google Sheets.
+- Nút **Cập nhật** luôn tải ngay theo yêu cầu. Thêm, sửa, xóa giao dịch hoặc thay ngân sách vẫn vô hiệu hóa cache, nên lần đọc cần thiết tiếp theo không bị bỏ qua.
+- Các yêu cầu đọc giống hệt nhau đang chạy đồng thời được gộp thành một yêu cầu mạng. Khi có thao tác ghi, yêu cầu đọc đang theo dõi không được tái sử dụng cho dữ liệu mới.
+- Khi mở lại ứng dụng hoặc có mạng trở lại, hệ thống chỉ cập nhật ngầm nếu dữ liệu đã cũ. Đây là ngưỡng độ mới, không phải lịch gọi máy chủ mỗi 60 giây.

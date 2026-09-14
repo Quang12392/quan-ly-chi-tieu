@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {fixture} from './storage.mjs';
 const compiled=await build({entryPoints:['src/api/client.ts'],bundle:true,write:false,format:'esm',platform:'node',define:{'import.meta.env':'{}'}});
+const cacheCompiled=await build({entryPoints:['src/utils/dashboardCache.ts'],bundle:true,write:false,format:'esm',platform:'node'});
+const {isPreviewFresh,AUTO_REFRESH_MAX_AGE_MS}=await import('data:text/javascript;base64,'+Buffer.from(cacheCompiled.outputFiles[0].text).toString('base64'));
 const store=new Map([['fam_exp_api_url','https://mock.invalid'],['family_auth_session','husband']]);
 global.localStorage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)};
 const {api}=await import('data:text/javascript;base64,'+Buffer.from(compiled.outputFiles[0].text).toString('base64'));
@@ -9,6 +11,9 @@ const records=Array.from({length:150},(_,i)=>({id:'id'+i,date:'2026-09-12',type:
 const server=fixture(records);server.context.migrateToYearlyStorage();
 const normal=async(_url,opts)=>{const {action,payload}=JSON.parse(opts.body);return {ok:true,json:async()=>({ok:true,data:action==='getCategories'?server.context.readNamed_('Categories'):server.api(action,payload)})};};
 global.fetch=normal;
+const freshnessNow=Date.now();
+assert.equal(isPreviewFresh(freshnessNow-AUTO_REFRESH_MAX_AGE_MS+1,freshnessNow),true);
+assert.equal(isPreviewFresh(freshnessNow-AUTO_REFRESH_MAX_AGE_MS-1,freshnessNow),false);
 const q={from:'2026-09-01',through:'2026-09-30',limit:100};
 assert.equal(api.getCachedTransactions(q),null);
 const page=await api.getTransactionSnapshot(q);assert.equal(page.data.page.items.length,100);
