@@ -387,3 +387,9 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Nút **Cập nhật** luôn tải ngay theo yêu cầu. Thêm, sửa, xóa giao dịch hoặc thay ngân sách vẫn vô hiệu hóa cache, nên lần đọc cần thiết tiếp theo không bị bỏ qua.
 - Các yêu cầu đọc giống hệt nhau đang chạy đồng thời được gộp thành một yêu cầu mạng. Khi có thao tác ghi, yêu cầu đọc đang theo dõi không được tái sử dụng cho dữ liệu mới.
 - Khi mở lại ứng dụng hoặc có mạng trở lại, hệ thống chỉ cập nhật ngầm nếu dữ liệu đã cũ. Đây là ngưỡng độ mới, không phải lịch gọi máy chủ mỗi 60 giây.
+
+### 9.9 Hiển thị ngay danh mục vừa thay đổi (v2.1.8)
+
+- Khi thêm danh mục thành công, ứng dụng ghép danh mục do máy chủ vừa trả về vào danh sách và bản xem trước trên thiết bị. Form hiển thị danh mục mới ngay, không gửi thêm một yêu cầu đọc Google Sheets.
+- Khi đổi tên hoặc ẩn/hiện danh mục thành công, danh sách trên form cũng được cập nhật trực tiếp. Các cache Tổng quan, Giao dịch và Báo cáo vẫn bị vô hiệu hóa để lần mở cần thiết tiếp theo phản ánh thay đổi.
+- Danh mục được thêm từ thiết bị khác hoặc chỉnh trực tiếp trong Google Sheets không có cơ chế đẩy thời gian thực; thiết bị hiện tại nhận thay đổi khi tải lại danh mục hoặc khi dữ liệu hết thời gian còn mới.

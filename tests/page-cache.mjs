@@ -9,7 +9,8 @@ global.localStorage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,St
 const {api}=await import('data:text/javascript;base64,'+Buffer.from(compiled.outputFiles[0].text).toString('base64'));
 const records=Array.from({length:150},(_,i)=>({id:'id'+i,date:'2026-09-12',type:'expense',amount:1000,member_id:i%2?'wife':'husband',category_id:'food',note:'Test',created_at:'2026-09-12T02:00:00Z',updated_at:'2026-09-12T02:00:00Z',deleted:false}));
 const server=fixture(records);server.context.migrateToYearlyStorage();
-const normal=async(_url,opts)=>{const {action,payload}=JSON.parse(opts.body);return {ok:true,json:async()=>({ok:true,data:action==='getCategories'?server.context.readNamed_('Categories'):server.api(action,payload)})};};
+const calls=[];
+const normal=async(_url,opts)=>{const {action,payload}=JSON.parse(opts.body);calls.push(action);const response=action==='createCategory'?JSON.parse(server.context.handleCreateCategory(payload)):action==='updateCategory'?JSON.parse(server.context.handleUpdateCategory(payload)):{ok:true,data:action==='getCategories'?server.context.readNamed_('Categories'):server.api(action,payload)};return {ok:true,json:async()=>response};};
 global.fetch=normal;
 const freshnessNow=Date.now();
 assert.equal(isPreviewFresh(freshnessNow-AUTO_REFRESH_MAX_AGE_MS+1,freshnessNow),true);
@@ -37,4 +38,11 @@ let release;global.fetch=async(_url,opts)=>JSON.parse(opts.body).action==='getRe
 const late=api.getReportSnapshot(2026,9);await new Promise(resolve=>setImmediate(resolve));
 global.fetch=normal;await api.createTransaction({...records[0],amount:3000});release({ok:true,data:server.api('getReportBundle',{year:2026,month:9})});await assert.rejects(()=>late,/vừa thay đổi/);assert.equal(api.getCachedReport(2026,9),null);
 store.set('fam_exp_page_preview_v1','invalid');assert.equal(api.getCachedReport(2026,9),null);
+const callsBeforeCategory=calls.length;
+await api.createCategory({name:'Du lịch',type:'expense',icon:'Plane',sort_order:20,active:true});
+const callsAfterCategoryWrite=calls.length;
+assert.equal(callsAfterCategoryWrite-callsBeforeCategory,1);
+assert.equal(api.getCachedCategories()?.some(category=>category.name==='Du lịch'),true,'A confirmed category write updates the local preview immediately');
+await api.getCategories();
+assert.equal(calls.length,callsAfterCategoryWrite,'The add form does not need a follow-up Sheets read after creating a category');
 console.log('Page cache tests passed: first-page pagination, filter/month/account isolation, empty months, offline, writes and stale responses.');

@@ -509,7 +509,10 @@ class ApiClient {
   async createCategory(payload: Omit<Category, 'id'>): Promise<Category> {
     this.invalidate();
     if (this.isLiveMode()) {
-      return this.requestGAS<Category>('createCategory', payload as unknown as Record<string, unknown>);
+      const created = await this.requestGAS<Category>('createCategory', payload as unknown as Record<string, unknown>);
+      const cached = this.getCachedCategories();
+      if (cached) this.rememberCategories([...cached.filter((category) => category.id !== created.id), created]);
+      return created;
     }
     this.initMockStorage();
     const categories = this.getLocal<Category[]>(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
@@ -525,7 +528,12 @@ class ApiClient {
   async updateCategory(id: string, payload: Partial<Category>): Promise<Category> {
     this.invalidate();
     if (this.isLiveMode()) {
-      return this.requestGAS<Category>('updateCategory', { id, ...payload });
+      await this.requestGAS<Category>('updateCategory', { id, ...payload });
+      const cached = this.getCachedCategories();
+      const current = cached?.find((category) => category.id === id);
+      const updated = current ? { ...current, ...payload, id } : { ...payload, id } as Category;
+      if (cached && current) this.rememberCategories(cached.map((category) => category.id === id ? updated : category));
+      return updated;
     }
     this.initMockStorage();
     const categories = this.getLocal<Category[]>(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
