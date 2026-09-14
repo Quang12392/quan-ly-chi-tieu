@@ -12,6 +12,7 @@ global.fetch=normal;
 const q={from:'2026-09-01',through:'2026-09-30',limit:100};
 assert.equal(api.getCachedTransactions(q),null);
 const page=await api.getTransactionSnapshot(q);assert.equal(page.data.page.items.length,100);
+assert.equal(api.getCachedCategories()?.find(c=>c.id==='food')?.name,'Ăn uống','The add form can immediately reuse categories loaded by another page');
 assert.equal(api.getCachedTransactions(q).data.page.items.length,100);
 assert.equal(api.getCachedTransactions({...q,member_id:'wife'}),null);
 assert.equal(api.getCachedTransactions({...q,search:'different'}),null);
@@ -21,9 +22,10 @@ assert.equal(api.getCachedTransactions(q).data.page.items.length,100,'Page two n
 await api.getReportSnapshot(2026,9);assert.equal(api.getCachedReport(2026,9).data.summary.total_expense,150000);
 assert.equal(api.getCachedReport(2026,10),null);
 store.set('family_auth_session','wife');assert.equal(api.getCachedTransactions(q),null);assert.equal(api.getCachedReport(2026,9),null);store.set('family_auth_session','husband');
-store.set('fam_exp_api_url','https://different.invalid');assert.equal(api.getCachedReport(2026,9),null);store.set('fam_exp_api_url','https://mock.invalid');
+store.set('family_auth_session','wife');assert.equal(api.getCachedCategories(),null,'Category preview is isolated by signed-in member');store.set('family_auth_session','husband');
+store.set('fam_exp_api_url','https://different.invalid');assert.equal(api.getCachedReport(2026,9),null);assert.equal(api.getCachedCategories(),null,'Category preview is isolated by connection');store.set('fam_exp_api_url','https://mock.invalid');
 global.fetch=async()=>{throw Error('Offline');};await assert.rejects(()=>api.getReportSnapshot(2026,9),/Offline/);assert.equal(api.getCachedReport(2026,9).data.summary.total_expense,150000);
-global.fetch=normal;await api.createTransaction({...records[0],amount:2000});assert.equal(api.getCachedTransactions(q),null);assert.equal(api.getCachedReport(2026,9),null);
+global.fetch=normal;await api.createTransaction({...records[0],amount:2000});assert.equal(api.getCachedTransactions(q),null);assert.equal(api.getCachedReport(2026,9),null);assert.equal(api.getCachedCategories()?.length,2,'A transaction write keeps the last usable category list');
 await api.getTransactionSnapshot({from:'2027-01-01',through:'2027-01-31'});assert.equal(api.getCachedTransactions({from:'2027-01-01',through:'2027-01-31'}).data.page.items.length,0,'Empty month is cacheable');
 // A late report response cannot resurrect a snapshot invalidated by a write.
 let release;global.fetch=async(_url,opts)=>JSON.parse(opts.body).action==='getReportBundle'?{ok:true,json:()=>new Promise(resolve=>{release=resolve;})}:normal(_url,opts);

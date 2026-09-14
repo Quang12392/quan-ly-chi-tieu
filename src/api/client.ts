@@ -30,6 +30,7 @@ const STORAGE_KEYS = {
   BUDGETS: 'fam_exp_budgets',
   SETTINGS: 'fam_exp_settings',
   API_URL: 'fam_exp_api_url',
+  CATEGORY_PREVIEW: 'fam_exp_category_preview_v1',
 };
 
 class ApiClient {
@@ -42,6 +43,55 @@ class ApiClient {
     const value = loader().catch(error => { this.metadata.delete(fullKey); throw error; });
     this.metadata.set(fullKey, { value, expires: Date.now() + ttl });
     return value;
+  }
+
+  private categoryScope(): string {
+    return JSON.stringify([this.getApiUrl() || 'local', localStorage.getItem('family_auth_session') || '']);
+  }
+
+  private normalizeCategories(value: unknown): Category[] {
+    if (!Array.isArray(value)) throw new Error('Phản hồi danh mục không hợp lệ. Vui lòng thử lại.');
+    return value.map((item) => {
+      const category = item as Partial<Category>;
+      if (!category || typeof category.id !== 'string' || typeof category.name !== 'string'
+        || (category.type !== 'expense' && category.type !== 'income')) {
+        throw new Error('Phản hồi danh mục không hợp lệ. Vui lòng thử lại.');
+      }
+      return {
+        id: category.id,
+        name: category.name,
+        type: category.type,
+        icon: typeof category.icon === 'string' ? category.icon : 'Tag',
+        sort_order: Number(category.sort_order) || 99,
+        active: category.active === true || String(category.active).toLowerCase() === 'true',
+      };
+    });
+  }
+
+  private rememberCategories(value: unknown): Category[] {
+    const categories = this.normalizeCategories(value);
+    const fullKey = this.getApiUrl() + 'categories';
+    this.metadata.set(fullKey, { value: Promise.resolve(categories), expires: Date.now() + 15000 });
+    try {
+      localStorage.setItem(STORAGE_KEYS.CATEGORY_PREVIEW, JSON.stringify({
+        scope: this.categoryScope(),
+        categories,
+        savedAt: Date.now(),
+      }));
+    } catch { /* The form can still use the fresh server response when storage is unavailable. */ }
+    return categories;
+  }
+
+  public getCachedCategories(): Category[] | null {
+    if (!this.isLiveMode()) {
+      this.initMockStorage();
+      return this.normalizeCategories(this.getLocal<Category[]>(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES));
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEYS.CATEGORY_PREVIEW) || 'null');
+      if (stored?.scope !== this.categoryScope()) return null;
+      return this.normalizeCategories(stored.categories);
+    } catch { return null; }
   }
   async getStorageStatus(): Promise<StorageStatus> {
     if (!this.isLiveMode()) return { api_version: 2, storage_version: 0 };
@@ -161,7 +211,8 @@ class ApiClient {
 
   async getBootstrapData(): Promise<BootstrapData> {
     if (this.isLiveMode()) {
-      return this.requestGAS<BootstrapData>('getBootstrapData');
+      const data = await this.requestGAS<BootstrapData>('getBootstrapData');
+      return { ...data, categories: this.rememberCategories(data.categories) };
     }
 
     this.initMockStorage();
@@ -305,7 +356,7 @@ class ApiClient {
       // Modern backend returns everything in one response; no status probe first.
       const result = await this.requestGAS<DashboardSummary & { categories?: Category[] }>('getDashboardSummary', {year, month});
       summary = result;
-      if (Array.isArray(result.categories)) categories = result.categories;
+      if (Array.isArray(result.categories)) categories = this.rememberCategories(result.categories);
       else {
         // Keep compatibility with the older backend without a separate capability request.
         const [cats, budgets] = await Promise.all([this.getCategories(), this.getBudgets(year, month)]);
@@ -433,10 +484,12 @@ class ApiClient {
 
   async getCategories(): Promise<Category[]> {
     if (this.isLiveMode()) {
-      return this.memo('categories', () => this.requestGAS<Category[]>('getCategories'));
+      return this.memo('categories', async () => this.rememberCategories(
+        await this.requestGAS<Category[]>('getCategories')
+      ));
     }
     this.initMockStorage();
-    return this.getLocal<Category[]>(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES);
+    return this.normalizeCategories(this.getLocal<Category[]>(STORAGE_KEYS.CATEGORIES, INITIAL_CATEGORIES));
   }
 
   async createCategory(payload: Omit<Category, 'id'>): Promise<Category> {
@@ -606,7 +659,8 @@ class ApiClient {
 
   async getReportBundle(year: number, month: number): Promise<ReportBundle> {
     if (this.isLiveMode() && (await this.getStorageStatus()).api_version >= 2) {
-      return this.requestGAS<ReportBundle>('getReportBundle', {year, month});
+      const report = await this.requestGAS<ReportBundle>('getReportBundle', {year, month});
+      return { ...report, categories: this.rememberCategories(report.categories) };
     }
     // One detail request for the entire report, instead of 14 separate scans.
     const [transactions, categories] = await Promise.all([this.getTransactions(), this.getCategories()]);

@@ -20,7 +20,10 @@ export const AddTransactionPage: React.FC = () => {
   const [date, setDate] = useState<string>(getTodayString());
   const [note, setNote] = useState<string>('');
 
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>(() => api.getCachedCategories() || []);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoryLoadError, setCategoryLoadError] = useState('');
+  const categoryLoadIdRef = useRef(0);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -34,21 +37,33 @@ export const AddTransactionPage: React.FC = () => {
   }, [currentUser, entryKey]);
 
   const loadCategories = async () => {
+    const loadId = ++categoryLoadIdRef.current;
+    setCategoriesLoading(true);
+    setCategoryLoadError('');
     try {
       const list = await api.getCategories();
+      if (loadId !== categoryLoadIdRef.current) return;
       setCategories(list);
-      const filtered = list.filter((c) => c.type === type && c.active);
-      if (filtered.length > 0) {
-        setCategoryId(filtered[0].id);
-      }
     } catch (err) {
+      if (loadId !== categoryLoadIdRef.current) return;
       console.error('Failed to load categories', err);
+      setCategoryLoadError(err instanceof Error ? err.message : 'Không thể tải danh mục');
+    } finally {
+      if (loadId === categoryLoadIdRef.current) setCategoriesLoading(false);
     }
   };
 
   useEffect(() => {
-    loadCategories();
-  }, [type]);
+    void loadCategories();
+    return () => { categoryLoadIdRef.current += 1; };
+  }, [entryKey]);
+
+  useEffect(() => {
+    const available = categories.filter((category) => category.type === type && category.active);
+    setCategoryId((current) => available.some((category) => category.id === current)
+      ? current
+      : (available[0]?.id || ''));
+  }, [categories, type]);
 
   // Auto-focus amount input on page load
   useEffect(() => {
@@ -128,11 +143,7 @@ export const AddTransactionPage: React.FC = () => {
       <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-200/70 rounded-2xl">
         <button
           type="button"
-          onClick={() => {
-            setType('expense');
-            const exp = categories.filter((c) => c.type === 'expense' && c.active);
-            if (exp.length > 0) setCategoryId(exp[0].id);
-          }}
+          onClick={() => setType('expense')}
           className={`py-2.5 rounded-xl font-bold text-sm transition ${
             type === 'expense'
               ? 'bg-white text-rose-600 shadow-sm'
@@ -143,11 +154,7 @@ export const AddTransactionPage: React.FC = () => {
         </button>
         <button
           type="button"
-          onClick={() => {
-            setType('income');
-            const inc = categories.filter((c) => c.type === 'income' && c.active);
-            if (inc.length > 0) setCategoryId(inc[0].id);
-          }}
+          onClick={() => setType('income')}
           className={`py-2.5 rounded-xl font-bold text-sm transition ${
             type === 'income'
               ? 'bg-white text-emerald-600 shadow-sm'
@@ -259,14 +266,40 @@ export const AddTransactionPage: React.FC = () => {
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+            disabled={filteredCategories.length === 0}
+            aria-busy={categoriesLoading}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white disabled:text-slate-400 disabled:cursor-not-allowed"
           >
+            {filteredCategories.length === 0 && (
+              <option value="">
+                {categoriesLoading ? 'Đang tải danh mục...' : `Chưa có danh mục ${type === 'expense' ? 'chi' : 'thu'} đang bật`}
+              </option>
+            )}
             {filteredCategories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
+          {categoriesLoading && filteredCategories.length > 0 && (
+            <p className="text-[11px] text-slate-400">Đang cập nhật danh mục mới nhất...</p>
+          )}
+          {categoryLoadError && (
+            <div className="flex items-center justify-between gap-3 text-[11px] text-amber-700">
+              <span>
+                {filteredCategories.length > 0
+                  ? 'Chưa cập nhật được; đang dùng danh mục đã tải trước đó.'
+                  : categoryLoadError}
+              </span>
+              <button
+                type="button"
+                onClick={() => void loadCategories()}
+                className="shrink-0 font-semibold text-emerald-700 hover:text-emerald-800"
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Date picker */}

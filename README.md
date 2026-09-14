@@ -367,3 +367,9 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Cùng vô hiệu hóa bản lưu với Tổng quan khi ghi dữ liệu, đổi kết nối, đăng xuất. Phản hồi đến muộn sau thao tác ghi không được lưu lại. Nếu tải mới thất bại, giữ bản xem trước cùng thông báo lỗi và nút thử lại.
 - Tự cập nhật khi mở tab, đổi tháng/bộ lọc, quay lại app từ nền hoặc có mạng trở lại. **Không có lịch đồng bộ 60 giây hay bất kỳ chu kỳ định kỳ nào.** Ô tìm kiếm chờ 250ms để giảm yêu cầu khi đang gõ; đây không phải lịch đồng bộ.
 - Kiểm thử: `npm run test:pages`, `npm run test:startup`, `npm run test:storage`, `npm run build`.
+
+### 9.6 Danh mục trong form Thêm giao dịch (v2.1.5)
+
+- Danh mục nhận được từ Tổng quan, Giao dịch hoặc Báo cáo được lưu làm bản xem trước theo kết nối và thành viên đăng nhập. Khi mở form bằng nút `+` hoặc “Thêm giao dịch thu / chi”, danh sách gần nhất hiển thị ngay rồi được cập nhật từ Google Sheets ở nền.
+- Nếu lần tải mới bị chậm hoặc lỗi mạng, form tiếp tục dùng danh mục đã tải trước đó và có nút **Thử lại**. Nếu thiết bị chưa từng tải danh mục, ô chọn hiển thị rõ trạng thái đang tải hoặc lỗi thay vì để trống.
+- Khi chuyển Khoản Chi / Khoản Thu, lựa chọn hiện tại chỉ được giữ nếu còn hợp lệ; nếu không, form tự chọn danh mục đang bật đầu tiên của đúng loại. Phản hồi danh mục sai cấu trúc không được ghi vào bản xem trước.
