@@ -348,7 +348,7 @@ export const DashboardPage: React.FC = () => {
             </div>
           )}
 
-          {/* Top 5 Categories Breakdown */}
+          {/* All expense categories, ordered by total descending */}
           <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-800 text-xs">Top chi tiêu theo danh mục</h3>
@@ -361,7 +361,7 @@ export const DashboardPage: React.FC = () => {
               <p className="text-xs text-slate-400 text-center py-4">Chưa có chi tiêu nào trong tháng này</p>
             ) : (
               <div className="space-y-3">
-                {summary.category_breakdown.slice(0, 5).map((cat) => (
+                {summary.category_breakdown.map((cat) => (
                   <div key={cat.category_id} className="space-y-1">
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-medium text-slate-700">{cat.category_name}</span>

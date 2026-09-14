@@ -408,3 +408,7 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Mỗi lần thêm giao dịch có một `request_id` duy nhất. Backend API v3 dùng mã này tạo ID giao dịch ổn định; yêu cầu được gửi lại bao nhiêu lần cũng chỉ có một dòng trong Google Sheets. Nếu cùng mã nhưng nội dung khác, máy chủ từ chối để tránh ghi nhầm.
 - Trước khi gửi, ứng dụng lưu lệnh đang chờ trên thiết bị. Chỉ xóa lệnh khi nhận được xác nhận từ máy chủ. Nếu mất mạng, hết thời gian chờ hoặc tải lại trang, form hiện cảnh báo và nút **Kiểm tra & đồng bộ lại**; nút này gửi lại đúng mã cũ nên vừa có thể hoàn tất lệnh chưa ghi, vừa xác nhận lệnh đã ghi mà không tạo bản sao. Người dùng chỉ có thể bỏ lệnh chờ sau cảnh báo yêu cầu kiểm tra Lịch sử giao dịch.
 - Nếu Google Apps Script chưa được cập nhật lên API v3, hành động đồng bộ an toàn báo rõ cần triển khai lại `apps-script/Code_AllInOne.gs` và giữ nguyên lệnh chờ trên thiết bị.
+
+### 9.12 Hiển thị đầy đủ chi tiêu theo danh mục (v2.2.1)
+
+- Phần **Top chi tiêu theo danh mục** trên Tổng quan hiển thị toàn bộ danh mục có phát sinh chi trong tháng, theo thứ tự số tiền giảm dần; không còn giới hạn 5 danh mục.
