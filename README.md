@@ -373,3 +373,10 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Danh mục nhận được từ Tổng quan, Giao dịch hoặc Báo cáo được lưu làm bản xem trước theo kết nối và thành viên đăng nhập. Khi mở form bằng nút `+` hoặc “Thêm giao dịch thu / chi”, danh sách gần nhất hiển thị ngay rồi được cập nhật từ Google Sheets ở nền.
 - Nếu lần tải mới bị chậm hoặc lỗi mạng, form tiếp tục dùng danh mục đã tải trước đó và có nút **Thử lại**. Nếu thiết bị chưa từng tải danh mục, ô chọn hiển thị rõ trạng thái đang tải hoặc lỗi thay vì để trống.
 - Khi chuyển Khoản Chi / Khoản Thu, lựa chọn hiện tại chỉ được giữ nếu còn hợp lệ; nếu không, form tự chọn danh mục đang bật đầu tiên của đúng loại. Phản hồi danh mục sai cấu trúc không được ghi vào bản xem trước.
+
+### 9.7 Giảm thời gian chờ Google Sheets (v2.1.6)
+
+- Form Thêm có thể lấy danh mục từ mọi bản xem trước Tổng quan, Giao dịch hoặc Báo cáo đã có trên thiết bị, kể cả bản được tạo trước v2.1.5. Mở form từ Tổng quan vì vậy không cần chờ một yêu cầu danh mục mới.
+- Backend dùng `CacheService` của Apps Script cho danh mục và ngân sách trong 5 phút. Thay đổi qua ứng dụng xóa cache liên quan ngay; cache chỉ là lớp tăng tốc, Google Sheets vẫn là nguồn dữ liệu chính.
+- Phản hồi Tổng quan được cache tối đa 90 giây và Báo cáo tối đa 180 giây theo phiên bản dữ liệu cùng cấu trúc các bảng giao dịch. Thêm, sửa, xóa giao dịch, thay danh mục/ngân sách hoặc thay đổi trực tiếp trong bảng giao dịch làm đổi khóa cache; thêm/xóa dòng trực tiếp cũng được nhận biết qua số dòng.
+- Cache backend không loại bỏ hoàn toàn thời gian khởi động nguội của Google Apps Script, nhưng giảm số lần đọc Spreadsheet và cho phép các lần mở/cập nhật lặp lại trả kết quả nhanh hơn. Cache có thể bị Google thu hồi sớm; backend luôn tự đọc lại Sheet khi không có cache.

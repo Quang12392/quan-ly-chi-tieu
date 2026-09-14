@@ -346,7 +346,9 @@ class ApiClient {
     return JSON.stringify([this.getApiUrl() || 'local', localStorage.getItem('family_auth_session') || '']);
   }
   getCachedDashboard(year: number, month: number): DashboardSnapshot | null {
-    return readDashboardCache(this.dashboardScope(), year, month);
+    const snapshot = readDashboardCache(this.dashboardScope(), year, month);
+    if (snapshot) snapshot.categories = this.rememberCategories(snapshot.categories);
+    return snapshot;
   }
   async getDashboardSnapshot(year: number, month: number): Promise<DashboardSnapshot> {
     const scope = this.dashboardScope(), revision = dashboardRevision();
@@ -608,7 +610,9 @@ class ApiClient {
       && view.page.items.every(t => t && typeof t.id === 'string' && typeof t.date === 'string' && Number.isFinite(t.amount));
   }
   getCachedTransactions(query: TransactionQuery): PageSnapshot<{page: TransactionPage; categories: Category[]}> | null {
-    return readPageCache(this.dashboardScope(),this.transactionViewKey(query),data => this.validTransactionView(data));
+    const snapshot = readPageCache(this.dashboardScope(),this.transactionViewKey(query),data => this.validTransactionView(data));
+    if (snapshot) snapshot.data.categories = this.rememberCategories(snapshot.data.categories);
+    return snapshot;
   }
   async getTransactionSnapshot(query: TransactionQuery): Promise<PageSnapshot<{page: TransactionPage; categories: Category[]}>> {
     const scope = this.dashboardScope(), revision = dashboardRevision();
@@ -627,7 +631,9 @@ class ApiClient {
       && Array.isArray(r.budgets) && Array.isArray(r.trend) && Array.isArray(r.years);
   }
   getCachedReport(year: number, month: number): PageSnapshot<ReportBundle> | null {
-    return readPageCache(this.dashboardScope(),`report:${year}:${month}`,data => this.validReport(data));
+    const snapshot = readPageCache(this.dashboardScope(),`report:${year}:${month}`,data => this.validReport(data));
+    if (snapshot) snapshot.data.categories = this.rememberCategories(snapshot.data.categories);
+    return snapshot;
   }
   async getReportSnapshot(year: number, month: number): Promise<PageSnapshot<ReportBundle>> {
     const scope = this.dashboardScope(), revision = dashboardRevision();

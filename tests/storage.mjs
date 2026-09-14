@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks';
 const source=fs.readFileSync('apps-script/Code_AllInOne.gs','utf8');
 const headers=['id','date','type','amount','category_id','member_id','account_id','note','created_at','updated_at','deleted'];
 export function fixture(transactions=[]) {
- const metrics={reads:[],writes:0,backups:0,failOn:null};
+ const metrics={reads:[],writes:0,backups:0,failOn:null,cacheHits:0};
  class Range {
   constructor(sheet,r,c,n=1,m=1){Object.assign(this,{sheet,r,c,n,m});}
   getValues(){return Array.from({length:this.n},(_,i)=>Array.from({length:this.m},(_,j)=>this.sheet.rows[this.r+i-1]?.[this.c+j-1]??''));}
@@ -28,12 +28,13 @@ export function fixture(transactions=[]) {
  add('Budgets',[['id','year','month','category_id','amount'],['b1',2026,1,'food',1000000]]);
  add('Members',[['id','name'],['husband','Chồng'],['wife','Vợ']]);
  add('Settings',[['key','value'],['schema_version',1]]);
- const props=new Map(),triggers=[];
+ const props=new Map(),triggers=[],cache=new Map();
  const ss={getSheetByName:n=>sheets.get(n),getSheets:()=>[...sheets.values()],insertSheet:n=>add(n,[]),getId:()=> 'test-id',getName:()=> 'Test',copy:()=>{metrics.backups++;return {getUrl:()=> 'https://docs.google.com/spreadsheets/d/backup'};}};
  const p={getProperty:k=>props.get(k)||null,setProperty:(k,v)=>{props.set(k,String(v));return p;},deleteProperty:k=>props.delete(k)};
  let locked=false;
  const context=vm.createContext({console,Date,Map,Set,JSON,Math,Number,String,Object,Array,Error,
   PropertiesService:{getScriptProperties:()=>p},SpreadsheetApp:{getActiveSpreadsheet:()=>ss,flush(){}},
+  CacheService:{getScriptCache:()=>({get:key=>{const value=cache.get(key);if(value!==undefined)metrics.cacheHits++;return value??null;},put:(key,value)=>cache.set(key,String(value)),remove:key=>cache.delete(key)})},
   LockService:{getScriptLock:()=>({waitLock(){assert.equal(locked,false);locked=true;},releaseLock(){locked=false;}})},
   Utilities:{getUuid:()=>crypto.randomUUID(),newBlob:t=>({getBytes:()=>Buffer.from(t)}),DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(_,t)=>crypto.createHash('sha256').update(t).digest(),base64Encode:b=>Buffer.from(b).toString('base64'),formatDate:d=>d.toISOString().slice(0,10)},
   Session:{getScriptTimeZone:()=> 'Asia/Bangkok'},Logger:{log(){}},DriveApp:{getFileById:()=>({makeCopy:()=>{metrics.backups++;return {getUrl:()=> 'https://drive.google.com/backup'};}})},
@@ -55,6 +56,7 @@ const report=f.api('getReportBundle',{year:2027,month:1});
 assert.equal(report.previous.total_expense,100000);assert.equal(report.summary.total_income,1000000);
 assert.equal(report.trend.length,12);assert.equal(report.years.length,2);
 assert.equal(f.metrics.reads.filter(n=>n.startsWith('Transactions')).length,0,'Warm reports never scan detail');
+f.metrics.reads=[];f.api('getReportBundle',{year:2027,month:1});assert.equal(f.metrics.reads.length,0,'Repeated reports are served without another Sheets read');assert.ok(f.metrics.cacheHits>0);
 f.metrics.reads=[];
 assert.equal(f.api('getTransactionsPage',{from:'2026-09-01',through:'2026-09-30'}).items.length,1);
 assert.deepEqual(f.metrics.reads.filter(n=>n.startsWith('Transactions')),['Transactions_2026']);
@@ -101,3 +103,12 @@ assert.equal(f.api('getReportBundle',{year:2028,month:4}).summary.total_income,2
 const detail2028=f.sheets.get('Transactions_2028');detail2028.rows.splice(1,1);
 assert.equal(f.api('getReportBundle',{year:2028,month:4}).summary.total_income,0);
 console.log('Export deduplication and direct-sheet-edit checks passed.');
+
+const reference=fixture();reference.metrics.reads=[];
+JSON.parse(reference.context.handleGetCategories());
+assert.deepEqual(reference.metrics.reads,['Categories']);
+reference.metrics.reads=[];JSON.parse(reference.context.handleGetCategories());
+assert.equal(reference.metrics.reads.length,0,'Repeated category reads use Apps Script cache');
+JSON.parse(reference.context.handleUpdateCategory({id:'food',name:'Ăn tại nhà'}));
+reference.metrics.reads=[];const refreshedCategories=JSON.parse(reference.context.handleGetCategories()).data;
+assert.equal(refreshedCategories.find(category=>category.id==='food').name,'Ăn tại nhà','Category writes invalidate server cache');

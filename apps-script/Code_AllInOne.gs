@@ -441,11 +441,7 @@ function handleDeleteTransaction(payload) {
 // ============================================================================
 
 function handleGetCategories() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('Categories');
-  if (!sheet) return successResponse([]);
-
-  const list = sheetToObjects(sheet);
+  const list = readReference_('Categories', 300);
   list.sort((a, b) => (Number(a.sort_order) || 99) - (Number(b.sort_order) || 99));
 
   return successResponse(list);
@@ -479,6 +475,8 @@ function handleCreateCategory(payload) {
   });
 
   sheet.appendRow(rowData);
+  invalidateReference_('Categories');
+  touchDataRevision_();
   return successResponse(newCat);
 }
 
@@ -514,6 +512,8 @@ function handleUpdateCategory(payload) {
     }
   });
 
+  invalidateReference_('Categories');
+  touchDataRevision_();
   return successResponse({ id: payload.id, updated: true });
 }
 
@@ -522,11 +522,7 @@ function handleUpdateCategory(payload) {
 // ============================================================================
 
 function handleGetBudgets(payload) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('Budgets');
-  if (!sheet) return successResponse([]);
-
-  const list = sheetToObjects(sheet);
+  const list = readReference_('Budgets', 300);
   const year = Number(payload.year);
   const month = Number(payload.month);
 
@@ -597,6 +593,8 @@ function handleSaveBudget(payload) {
   if (targetRow !== -1) {
     sheet.getRange(targetRow, amtIdx).setValue(amount);
     if (updateIdx) sheet.getRange(targetRow, updateIdx).setValue(now);
+    invalidateReference_('Budgets');
+    touchDataRevision_();
     return successResponse({ id: data[targetRow - 1][headerMap['id'] - 1], year, month, category_id: categoryId, amount });
   } else {
     const id = 'b_' + year + '_' + month + '_' + categoryId;
@@ -617,6 +615,8 @@ function handleSaveBudget(payload) {
     });
 
     sheet.appendRow(rowData);
+    invalidateReference_('Budgets');
+    touchDataRevision_();
     return successResponse(newBudget);
   }
 }
@@ -792,8 +792,56 @@ function handleGetDashboardSummary(payload) {
 // ============================================================================
 const TX_COLUMNS = ['id','date','type','amount','category_id','member_id','account_id','note','created_at','updated_at','deleted'];
 const SUMMARY_COLUMNS = ['year','month','income','expense','categories','members','count'];
+const API_CACHE_VERSION = 'v1';
 function storageProps_() { return PropertiesService.getScriptProperties(); }
 function partitioned_() { return storageProps_().getProperty('storage_version') === '2'; }
+function cacheReadJson_(key) {
+  try {
+    const value=CacheService.getScriptCache().get(key);
+    return value===null ? null : JSON.parse(value);
+  } catch (_) { return null; }
+}
+function cacheWriteJson_(key,value,seconds) {
+  try {
+    const encoded=JSON.stringify(value);
+    if(encoded.length<90000)CacheService.getScriptCache().put(key,encoded,seconds);
+  } catch (_) { /* Cache is optional; Sheets remains the source of truth. */ }
+}
+function referenceCacheKey_(name) { return 'reference-'+API_CACHE_VERSION+'-'+name; }
+function readReference_(name,seconds) {
+  const key=referenceCacheKey_(name),cached=cacheReadJson_(key);
+  if(cached!==null)return cached;
+  const rows=readNamed_(name);
+  cacheWriteJson_(key,rows,seconds);
+  return rows;
+}
+function invalidateReference_(name) {
+  try { CacheService.getScriptCache().remove(referenceCacheKey_(name)); } catch (_) {}
+}
+function touchDataRevision_() { storageProps_().setProperty('data_revision', Utilities.getUuid()); }
+function hashText_(value) {
+  let hash=2166136261;
+  for(let i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619);}
+  return (hash>>>0).toString(16);
+}
+function apiResponseCacheKey_(action,payload) {
+  const ss=SpreadsheetApp.getActiveSpreadsheet();
+  const names=partitioned_()
+    ? (action==='getDashboardSummary' ? ['Transactions_'+Number(payload.year)] : yearSheets_())
+    : ['Transactions'];
+  const shape=names.map(name=>{const sheet=ss.getSheetByName(name);return name+':'+(sheet?sheet.getLastRow():0);}).join('|');
+  const revision=storageProps_().getProperty('data_revision')||'initial';
+  return 'response-'+API_CACHE_VERSION+'-'+action+'-'+revision+'-'+hashText_(shape)+'-'+Number(payload.year)+'-'+Number(payload.month);
+}
+function readApiResponseCache_(action,payload) {
+  if(!['getDashboardSummary','getReportBundle'].includes(action))return null;
+  if(storageProps_().getProperty('pending_transaction'))return null;
+  return cacheReadJson_(apiResponseCacheKey_(action,payload));
+}
+function writeApiResponseCache_(action,payload,value) {
+  if(!['getDashboardSummary','getReportBundle'].includes(action))return;
+  cacheWriteJson_(apiResponseCacheKey_(action,payload),value,action==='getDashboardSummary'?90:180);
+}
 function readNamed_(name) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
   return sheet ? sheetToObjects(sheet).filter(r => r.id || r.year || r.key) : [];
@@ -822,7 +870,7 @@ function markDirty_(years) {
   const p = storageProps_();
   const dirty = JSON.parse(p.getProperty('dirty_years') || '[]');
   p.setProperty('dirty_years', JSON.stringify(Array.from(new Set(dirty.concat(years.map(Number))))));
-  p.setProperty('data_revision', Utilities.getUuid());
+  touchDataRevision_();
 }
 function aggregateMonths_(txs, year) {
   const months = Array.from({length:12}, (_,i) => ({year:Number(year),month:i+1,income:0,expense:0,categories:{},members:{},count:0}));
@@ -960,6 +1008,8 @@ function mutateTx_(action,payload) {
 function dispatchStorageApi(action,payload) {
   const actions=['getBootstrapData','storageStatus','getReportBundle','getDashboardSummary','getTransactionsPage','getTransactions','createTransaction','updateTransaction','deleteTransaction','rebuildSummaries','exportData'];
   if(!actions.includes(action)) return null;
+  const cachedResponse=readApiResponseCache_(action,payload);
+  if(cachedResponse!==null)return cachedResponse;
   const lock=LockService.getScriptLock(); lock.waitLock(30000);
   try {
     recoverWrite_();
@@ -968,7 +1018,7 @@ function dispatchStorageApi(action,payload) {
     if(action==='getBootstrapData') {
       const now=new Date(),year=now.getFullYear(),month=now.getMonth()+1;
       const prefix=year+'-'+String(month).padStart(2,'0');
-      return {categories:readNamed_('Categories'),members:readNamed_('Members'),accounts:readNamed_('Accounts'),settings:Object.fromEntries(readNamed_('Settings').map(r=>[r.key,r.value])),current_month_transactions:pageTransactions_({from:prefix+'-01',through:prefix+'-'+new Date(Date.UTC(year,month,0)).getUTCDate(),limit:100}).items,current_month_budgets:resolveBudgets(readNamed_('Budgets'),year,month)};
+      return {categories:readReference_('Categories',300),members:readReference_('Members',300),accounts:readReference_('Accounts',300),settings:Object.fromEntries(readReference_('Settings',300).map(r=>[r.key,r.value])),current_month_transactions:pageTransactions_({from:prefix+'-01',through:prefix+'-'+new Date(Date.UTC(year,month,0)).getUTCDate(),limit:100}).items,current_month_budgets:resolveBudgets(readReference_('Budgets',300),year,month)};
     }
     if(action==='getTransactionsPage') return pageTransactions_(payload);
     if(action==='getTransactions') {
@@ -991,15 +1041,19 @@ function dispatchStorageApi(action,payload) {
     }
     validatePeriod_(payload);
     const year=Number(payload.year),month=Number(payload.month);
-    const rows=summaries_(),categories=readNamed_('Categories'),budgets=readNamed_('Budgets');
+    const rows=summaries_(),categories=readReference_('Categories',300),budgets=readReference_('Budgets',300);
     if(action==='getDashboardSummary') {
       const prefix=year+'-'+String(month).padStart(2,'0');
       const page=pageTransactions_({from:prefix+'-01',through:prefix+'-'+new Date(Date.UTC(year,month,0)).getUTCDate(),limit:10});
-      return {...dashboardFrom_(rows,year,month,categories,budgets,page.items),categories};
+      const result={...dashboardFrom_(rows,year,month,categories,budgets,page.items),categories};
+      writeApiResponseCache_(action,payload,result);
+      return result;
     }
     const trend=Array.from({length:12},(_,i)=>{const m=rows.find(r=>r.year===year&&r.month===i+1)||{income:0,expense:0};return {year,month:i+1,label:'T'+(i+1),income:m.income,expense:m.expense,balance:m.income-m.expense};});
     const years=Array.from(new Set(rows.map(r=>r.year).concat(year))).sort((a,b)=>a-b).map(y=>{const list=rows.filter(r=>r.year===y);const income=list.reduce((s,r)=>s+r.income,0),expense=list.reduce((s,r)=>s+r.expense,0);return {year:y,income,expense,balance:income-expense};});
-    return {summary:dashboardFrom_(rows,year,month,categories,budgets),previous:dashboardFrom_(rows,month===1?year-1:year,month===1?12:month-1,categories,budgets),categories,budgets:resolveBudgets(budgets,year,month),trend,years};
+    const result={summary:dashboardFrom_(rows,year,month,categories,budgets),previous:dashboardFrom_(rows,month===1?year-1:year,month===1?12:month-1,categories,budgets),categories,budgets:resolveBudgets(budgets,year,month),trend,years};
+    writeApiResponseCache_(action,payload,result);
+    return result;
   } finally {lock.releaseLock();}
 }
 // Run from Apps Script editor. Copies the spreadsheet before any migration writes.
