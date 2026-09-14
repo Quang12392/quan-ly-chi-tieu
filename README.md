@@ -160,6 +160,8 @@ try {
 ```
 Nhờ đó, khi cả 2 vợ chồng cùng bấm lưu chi tiêu cùng một giây, dữ liệu vẫn được ghi nhận trọn vẹn, không bao giờ bị đè mất.
 
+Mỗi lệnh thêm giao dịch từ ứng dụng còn có `request_id` riêng. Google Apps Script chuyển mã này thành khóa giao dịch ổn định: nhận lại cùng lệnh do bấm liên tiếp, mất phản hồi hoặc đồng bộ lại chỉ trả về giao dịch đã có, không ghi thêm dòng thứ hai.
+
 ---
 
 ## 4. CÁC QUY TẮC NGHIỆP VỤ & THUẬT TOÁN
@@ -399,3 +401,10 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Ngưỡng dữ liệu còn mới của Tổng quan, Giao dịch và Báo cáo là 300 giây. Hết 300 giây không tự tạo request theo đồng hồ; hệ thống chỉ kiểm tra ngưỡng khi mở tab, quay lại ứng dụng hoặc có mạng trở lại.
 - Một giao dịch được thêm/sửa/xóa trên thiết bị hiện tại sẽ vô hiệu hóa cache ngay. Sau khi ghi thành công, thiết bị đó đọc lại Lịch sử và Tổng quan từ máy chủ, không chờ hết 300 giây.
 - Thiết bị khác không nhận thông báo đẩy. Nó tiếp tục hiển thị bản xem trước của mình nếu bản đó còn dưới 300 giây; bấm **Cập nhật** để lấy ngay, hoặc mở/quay lại tab sau khi bản xem trước đã cũ để kích hoạt cập nhật nền.
+
+### 9.11 Chống lưu trùng và khôi phục lệnh chưa xác nhận (v2.2.0)
+
+- Nút Lưu dùng khóa đồng bộ để chặn nhiều sự kiện gửi xảy ra sát nhau trước khi React kịp cập nhật giao diện. Trong lúc gửi, toàn bộ form bị khóa và chỉ có đúng một yêu cầu được tạo.
+- Mỗi lần thêm giao dịch có một `request_id` duy nhất. Backend API v3 dùng mã này tạo ID giao dịch ổn định; yêu cầu được gửi lại bao nhiêu lần cũng chỉ có một dòng trong Google Sheets. Nếu cùng mã nhưng nội dung khác, máy chủ từ chối để tránh ghi nhầm.
+- Trước khi gửi, ứng dụng lưu lệnh đang chờ trên thiết bị. Chỉ xóa lệnh khi nhận được xác nhận từ máy chủ. Nếu mất mạng, hết thời gian chờ hoặc tải lại trang, form hiện cảnh báo và nút **Kiểm tra & đồng bộ lại**; nút này gửi lại đúng mã cũ nên vừa có thể hoàn tất lệnh chưa ghi, vừa xác nhận lệnh đã ghi mà không tạo bản sao. Người dùng chỉ có thể bỏ lệnh chờ sau cảnh báo yêu cầu kiểm tra Lịch sử giao dịch.
+- Nếu Google Apps Script chưa được cập nhật lên API v3, hành động đồng bộ an toàn báo rõ cần triển khai lại `apps-script/Code_AllInOne.gs` và giữ nguyên lệnh chờ trên thiết bị.

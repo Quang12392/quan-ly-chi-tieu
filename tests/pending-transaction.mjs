@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+
+const output=await build({entryPoints:['src/utils/pendingTransaction.ts'],bundle:true,write:false,format:'esm',platform:'node'});
+const store=new Map();
+global.localStorage={getItem:key=>store.get(key)??null,setItem:(key,value)=>store.set(key,String(value)),removeItem:key=>store.delete(key)};
+const pending=await import('data:text/javascript;base64,'+Buffer.from(output.outputFiles[0].text).toString('base64'));
+const scope='["https://mock.invalid","husband"]';
+const requestId=pending.createTransactionRequestId();
+const write={scope,requestId,payload:{date:'2026-09-14',type:'expense',amount:125000,category_id:'food',member_id:'husband',note:'Bữa tối'},savedAt:Date.now()};
+pending.savePendingTransaction(write);
+assert.deepEqual(pending.readPendingTransaction(scope),write,'An unconfirmed write survives a page reload');
+assert.equal(pending.readPendingTransaction('["other","husband"]'),null,'Pending writes are isolated by connection and member');
+pending.clearPendingTransaction(scope,'different_request_id_1234');
+assert.deepEqual(pending.readPendingTransaction(scope),write,'A different response cannot clear the pending command');
+pending.clearPendingTransaction(scope,requestId);
+assert.equal(pending.readPendingTransaction(scope),null,'Only the confirmed matching command is cleared');
+store.set('fam_exp_pending_transaction_v1','{"broken":true}');
+assert.equal(pending.readPendingTransaction(scope),null,'Corrupt pending data is ignored safely');
+console.log('Pending transaction recovery tests passed: persistence, isolation and exact confirmation.');

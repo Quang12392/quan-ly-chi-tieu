@@ -4,21 +4,33 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { Category, TransactionType } from '../types';
 import { formatNumberWithDots, parseCurrencyInput, getTodayString } from '../utils/formatters';
+import {
+  clearPendingTransaction,
+  createTransactionRequestId,
+  PendingTransactionPayload,
+  PendingTransactionWrite,
+  readPendingTransaction,
+  savePendingTransaction,
+} from '../utils/pendingTransaction';
 import { CategoryManagerModal } from '../components/categories/CategoryManagerModal';
-import { Check, Loader2, ArrowLeft, Settings2 } from 'lucide-react';
+import { Check, Loader2, ArrowLeft, Settings2, RefreshCw } from 'lucide-react';
 
 export const AddTransactionPage: React.FC = () => {
   const navigate = useNavigate();
   const { key: entryKey } = useLocation();
   const { currentUser } = useAuth();
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const submitGuardRef = useRef(false);
+  const writeScope = api.getTransactionWriteScope(currentUser || undefined);
+  const initialPendingRef = useRef<PendingTransactionWrite | null>(readPendingTransaction(writeScope));
+  const initialPending = initialPendingRef.current;
 
-  const [type, setType] = useState<TransactionType>('expense');
-  const [amountStr, setAmountStr] = useState<string>('');
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [memberId, setMemberId] = useState<string>(currentUser || 'husband');
-  const [date, setDate] = useState<string>(getTodayString());
-  const [note, setNote] = useState<string>('');
+  const [type, setType] = useState<TransactionType>(initialPending?.payload.type || 'expense');
+  const [amountStr, setAmountStr] = useState<string>(initialPending ? formatNumberWithDots(initialPending.payload.amount) : '');
+  const [categoryId, setCategoryId] = useState<string>(initialPending?.payload.category_id || '');
+  const [memberId, setMemberId] = useState<string>(initialPending?.payload.member_id || currentUser || 'husband');
+  const [date, setDate] = useState<string>(initialPending?.payload.date || getTodayString());
+  const [note, setNote] = useState<string>(initialPending?.payload.note || '');
 
   const [categories, setCategories] = useState<Category[]>(() => api.getCachedCategories() || []);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -26,15 +38,18 @@ export const AddTransactionPage: React.FC = () => {
   const categoryLoadIdRef = useRef(0);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string>('');
+  const [pendingWrite, setPendingWrite] = useState<PendingTransactionWrite | null>(initialPending);
+  const [errorMsg, setErrorMsg] = useState<string>(initialPending
+    ? 'Có một giao dịch chưa được Google Sheets xác nhận. Lệnh vẫn được giữ trên máy này.'
+    : '');
 
   // Category modal
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
 
   // A choice made on behalf of another member belongs only to this form entry.
   useEffect(() => {
-    setMemberId(currentUser || 'husband');
-  }, [currentUser, entryKey]);
+    if (!pendingWrite) setMemberId(currentUser || 'husband');
+  }, [currentUser, entryKey, pendingWrite]);
 
   const loadCategories = async () => {
     const loadId = ++categoryLoadIdRef.current;
@@ -89,41 +104,91 @@ export const AddTransactionPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting || success) return;
+    if (submitGuardRef.current || submitting || success || pendingWrite) return;
+    submitGuardRef.current = true;
     setErrorMsg('');
 
     const parsedAmount = parseCurrencyInput(amountStr);
     if (parsedAmount <= 0) {
       setErrorMsg('Vui lòng nhập số tiền lớn hơn 0');
       amountInputRef.current?.focus();
+      submitGuardRef.current = false;
       return;
     }
 
     if (!categoryId) {
       setErrorMsg('Vui lòng chọn danh mục');
+      submitGuardRef.current = false;
       return;
     }
 
+    const payload: PendingTransactionPayload = {
+      date,
+      type,
+      amount: parsedAmount,
+      category_id: categoryId,
+      member_id: memberId,
+      note: note.trim() || undefined,
+    };
+    const pending: PendingTransactionWrite = {
+      scope: writeScope,
+      requestId: createTransactionRequestId(),
+      payload,
+      savedAt: Date.now(),
+    };
+    setPendingWrite(pending);
+    savePendingTransaction(pending);
+
     try {
       setSubmitting(true);
-      await api.createTransaction({
-        date,
-        type,
-        amount: parsedAmount,
-        category_id: categoryId,
-        member_id: memberId,
-        note: note.trim() || undefined,
-      });
+      await api.createTransaction(payload, pending.requestId);
 
+      clearPendingTransaction(pending.scope, pending.requestId);
+      setPendingWrite(null);
       setSuccess(true);
       setTimeout(() => {
         navigate('/transactions', { state: { savedDate: date } });
       }, 400);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Không thể lưu giao dịch. Vui lòng thử lại.');
+      const detail = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
+      setErrorMsg(`Chưa xác nhận được giao dịch: ${detail} Lệnh vẫn được giữ trên máy này; hãy bấm “Kiểm tra & đồng bộ lại”.`);
     } finally {
+      submitGuardRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  const handleSyncPending = async () => {
+    if (!pendingWrite || submitGuardRef.current || submitting || success) return;
+    submitGuardRef.current = true;
+    setSubmitting(true);
+    setErrorMsg('');
+    try {
+      await api.syncTransaction(pendingWrite.payload, pendingWrite.requestId);
+      clearPendingTransaction(pendingWrite.scope, pendingWrite.requestId);
+      setPendingWrite(null);
+      setSuccess(true);
+      setTimeout(() => {
+        navigate('/transactions', { state: { savedDate: pendingWrite.payload.date } });
+      }, 400);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
+      setErrorMsg(detail.startsWith('INVALID_ACTION:')
+        ? 'Google Apps Script đang dùng bản cũ nên chưa thể đồng bộ an toàn. Hãy cập nhật Code_AllInOne.gs rồi bấm lại; lệnh vẫn được giữ trên máy này.'
+        : `Chưa đồng bộ được giao dịch: ${detail} Lệnh vẫn được giữ trên máy này để thử lại.`);
+    } finally {
+      submitGuardRef.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  const handleDiscardPending = () => {
+    if (!pendingWrite) return;
+    const confirmed = window.confirm('Chỉ bỏ lệnh này sau khi bạn đã kiểm tra Lịch sử giao dịch. Nếu lệnh chưa được ghi vào Google Sheets, dữ liệu sẽ không thể khôi phục.');
+    if (!confirmed) return;
+    clearPendingTransaction(pendingWrite.scope, pendingWrite.requestId);
+    setPendingWrite(null);
+    setErrorMsg('');
   };
 
   const filteredCategories = categories.filter((c) => c.type === type && c.active);
@@ -168,10 +233,33 @@ export const AddTransactionPage: React.FC = () => {
       <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
         {/* Error message display */}
         {errorMsg && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
-            {errorMsg}
+          <div className={`p-3 border rounded-xl text-xs font-medium ${pendingWrite ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+            <p>{errorMsg}</p>
+            {pendingWrite && (
+              <>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void handleSyncPending()}
+                  className="mt-2.5 w-full py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  <span>{submitting ? 'Đang kiểm tra Google Sheets…' : 'Kiểm tra & đồng bộ lại'}</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleDiscardPending}
+                  className="mt-2 w-full py-1 text-[11px] font-semibold text-amber-800 underline underline-offset-2 disabled:opacity-60"
+                >
+                  Tôi đã kiểm tra Lịch sử, bỏ lệnh đang chờ
+                </button>
+              </>
+            )}
           </div>
         )}
+
+        <fieldset disabled={submitting || success || !!pendingWrite} className="contents">
 
         {/* Amount Input */}
         <div className="space-y-1.5">
@@ -332,8 +420,8 @@ export const AddTransactionPage: React.FC = () => {
         {/* Submit button */}
         <button
           type="submit"
-          disabled={submitting || success}
-          className={`w-full py-3.5 px-4 rounded-2xl font-bold text-white shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99] ${
+          disabled={submitting || success || !!pendingWrite}
+          className={`w-full py-3.5 px-4 rounded-2xl font-bold text-white shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-60 ${
             type === 'expense'
               ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
               : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200'
@@ -353,6 +441,7 @@ export const AddTransactionPage: React.FC = () => {
             <span>Lưu {type === 'expense' ? 'Khoản Chi' : 'Khoản Thu'}</span>
           )}
         </button>
+        </fieldset>
       </form>
 
       {/* Category Manager Modal */}

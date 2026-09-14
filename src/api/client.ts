@@ -95,7 +95,7 @@ class ApiClient {
     } catch { return null; }
   }
   async getStorageStatus(): Promise<StorageStatus> {
-    if (!this.isLiveMode()) return { api_version: 2, storage_version: 0 };
+    if (!this.isLiveMode()) return { api_version: 3, storage_version: 0 };
     return this.memo('storageStatus', async () => {
       try { return await this.requestGAS<StorageStatus>('storageStatus'); }
       catch (error) {
@@ -172,7 +172,7 @@ class ApiClient {
       throw new Error('Chưa cấu hình URL Google Apps Script');
     }
 
-    const write = /^(create|update|delete|save|rebuild)/.test(action);
+    const write = /^(create|update|delete|save|rebuild|sync)/.test(action);
     const execute = async (): Promise<T> => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), write ? 45000 : 20000);
@@ -289,26 +289,55 @@ class ApiClient {
     return list.sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at));
   }
 
-  async createTransaction(payload: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted'>): Promise<Transaction> {
-    this.invalidate();
-    if (this.isLiveMode()) {
-      return this.requestGAS<Transaction>('createTransaction', payload as unknown as Record<string, unknown>);
-    }
+  public getTransactionWriteScope(memberId?: string): string {
+    return JSON.stringify([this.getApiUrl() || 'local', memberId || localStorage.getItem('family_auth_session') || '']);
+  }
 
+  private createLocalTransaction(
+    payload: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted'>,
+    requestId?: string,
+  ): Transaction {
     this.initMockStorage();
-    const now = new Date().toISOString();
-    const newTx: Transaction = {
-      ...payload,
-      id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      created_at: now,
-      updated_at: now,
-      deleted: false,
-    };
-
     const list = this.getLocal<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, SAMPLE_TRANSACTIONS);
+    const id = requestId ? `txr_${requestId}` : `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const existing = list.find((transaction) => transaction.id === id);
+    if (existing) return existing;
+
+    const now = new Date().toISOString();
+    const newTx: Transaction = { ...payload, id, created_at: now, updated_at: now, deleted: false };
     list.unshift(newTx);
     this.setLocal(STORAGE_KEYS.TRANSACTIONS, list);
     return newTx;
+  }
+
+  async createTransaction(
+    payload: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted'>,
+    requestId?: string,
+  ): Promise<Transaction> {
+    this.invalidate();
+    if (this.isLiveMode()) {
+      return this.requestGAS<Transaction>('createTransaction', {
+        ...payload as unknown as Record<string, unknown>,
+        ...(requestId ? { request_id: requestId } : {}),
+      });
+    }
+
+    return this.createLocalTransaction(payload, requestId);
+  }
+
+  async syncTransaction(
+    payload: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted'>,
+    requestId: string,
+  ): Promise<Transaction> {
+    if (!requestId) throw new Error('Thiếu mã lệnh giao dịch để đồng bộ an toàn');
+    this.invalidate();
+    if (this.isLiveMode()) {
+      return this.requestGAS<Transaction>('syncTransaction', {
+        ...payload as unknown as Record<string, unknown>,
+        request_id: requestId,
+      });
+    }
+    return this.createLocalTransaction(payload, requestId);
   }
 
   async updateTransaction(id: string, payload: Partial<Transaction>, originalYear?: number): Promise<Transaction> {

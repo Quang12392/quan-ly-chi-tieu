@@ -92,6 +92,20 @@ big.metrics.reads=[];big.api('getReportBundle',{year:2032,month:9});assert.equal
 big.api('createTransaction',tx('unused','2032-09-12'));assert.throws(()=>big.api('getTransactionsPage',{cursor:page.next_cursor}),/STALE_PAGE/);
 console.log(`Storage regression suite passed; 30,000-record in-memory migration + reads: ${(performance.now()-start).toFixed(0)}ms (not Google server timing).`);
 
+// Repeated delivery and recovery of one create command must produce exactly one row.
+const idempotent=fixture();idempotent.context.migrateToYearlyStorage();
+const request_id='request_1234567890abcdef';
+const createPayload={...tx('ignored','2026-09-14',125000),request_id};
+const firstCreate=idempotent.api('createTransaction',createPayload);
+const writesAfterFirst=idempotent.metrics.writes;
+const repeatedCreate=idempotent.api('createTransaction',createPayload);
+const recoveredCreate=idempotent.api('syncTransaction',createPayload);
+assert.equal(firstCreate.id,'txr_'+request_id);
+assert.equal(repeatedCreate.id,firstCreate.id);assert.equal(recoveredCreate.id,firstCreate.id);
+assert.equal(idempotent.metrics.writes,writesAfterFirst,'Retries must not write another row');
+assert.equal(idempotent.api('getTransactionsPage',{from:'2026-09-01',through:'2026-09-30'}).items.length,1);
+assert.throws(()=>idempotent.api('syncTransaction',{...createPayload,amount:999000}),/được dùng cho một giao dịch khác/);
+
 const exported=f.api('exportData');assert.equal(exported.transactions.length,new Set(exported.transactions.map(t=>t.id)).size);
 assert.equal(exported.settings.schema_version,1);
 // Cross-year direct edit is rehomed by the simple bound-sheet trigger.

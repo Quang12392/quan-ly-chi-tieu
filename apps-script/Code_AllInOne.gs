@@ -857,6 +857,20 @@ function validateTx_(t) {
   if (!t.id || !validDate_(t.date) || !['income','expense'].includes(t.type) || !Number.isSafeInteger(Number(t.amount)) || Number(t.amount) <= 0) throw new Error('Giao dịch không hợp lệ: ' + (t.id || 'thiếu mã'));
   if (!['husband','wife'].includes(t.member_id)) throw new Error('Thành viên không hợp lệ');
 }
+function transactionIdForRequest_(requestId) {
+  const value=String(requestId||'').trim();
+  if(!/^[A-Za-z0-9_-]{16,80}$/.test(value))throw new Error('Mã lệnh giao dịch không hợp lệ');
+  return 'txr_'+value;
+}
+function sameCreatePayload_(tx,payload) {
+  return String(tx.date)===String(payload.date)
+    && String(tx.type)===String(payload.type)
+    && Number(tx.amount)===Number(payload.amount)
+    && String(tx.category_id||'')===String(payload.category_id||'')
+    && String(tx.member_id||'')===String(payload.member_id||'')
+    && String(tx.account_id||'')===String(payload.account_id||'')
+    && String(tx.note||'')===String(payload.note||'');
+}
 function yearSheets_() {
   return SpreadsheetApp.getActiveSpreadsheet().getSheets().map(s => s.getName()).filter(n => /^Transactions_\d{4}$/.test(n)).sort().reverse();
 }
@@ -980,8 +994,23 @@ function recoverWrite_() {
 function mutateTx_(action,payload) {
   const p=storageProps_();
   if (p.getProperty('migration_state') && !partitioned_()) throw new Error('Đang chuyển dữ liệu. Vui lòng hoàn tất chuyển đổi trước khi nhập thêm.');
+  const creating=action==='createTransaction'||action==='syncTransaction';
+  const requestId=String(payload.request_id||'').trim();
+  if(action==='syncTransaction'&&!requestId)throw new Error('Thiếu mã lệnh giao dịch để đồng bộ an toàn');
+  let requestedId='';
+  if(creating&&requestId) {
+    requestedId=transactionIdForRequest_(requestId);
+    if(!validDate_(String(payload.date||'')))throw new Error('Ngày giao dịch không hợp lệ');
+    const expectedName=partitioned_()?'Transactions_'+String(payload.date).slice(0,4):'Transactions';
+    const expectedSheet=SpreadsheetApp.getActiveSpreadsheet().getSheetByName(expectedName);
+    const existing=expectedSheet?readNamed_(expectedName).find(t=>t.id===requestedId):null;
+    if(existing) {
+      if(!sameCreatePayload_(existing,payload))throw new Error('Mã lệnh đã được dùng cho một giao dịch khác');
+      return existing;
+    }
+  }
   let old=null;
-  if(action!=='createTransaction') {
+  if(!creating) {
     const names=partitioned_()?yearSheets_():['Transactions'];
     if(payload.original_year) names.sort((a,b)=>Number(b.endsWith(String(payload.original_year)))-Number(a.endsWith(String(payload.original_year))));
     for(const name of names) {
@@ -991,7 +1020,7 @@ function mutateTx_(action,payload) {
     if(!old) throw new Error('Không tìm thấy giao dịch');
   }
   const now=new Date().toISOString();
-  const tx=action==='createTransaction'?{id:generateUUID(),created_at:now,deleted:false}: {...old.tx};
+  const tx=creating?{id:requestedId||generateUUID(),created_at:now,deleted:false}: {...old.tx};
   const editable=['date','type','amount','category_id','member_id','account_id','note'];
   if(action!=='deleteTransaction') editable.forEach(k=>{if(payload[k]!==undefined)tx[k]=payload[k];});
   if(action==='deleteTransaction') tx.deleted=true;
@@ -1006,15 +1035,15 @@ function mutateTx_(action,payload) {
   return tx;
 }
 function dispatchStorageApi(action,payload) {
-  const actions=['getBootstrapData','storageStatus','getReportBundle','getDashboardSummary','getTransactionsPage','getTransactions','createTransaction','updateTransaction','deleteTransaction','rebuildSummaries','exportData'];
+  const actions=['getBootstrapData','storageStatus','getReportBundle','getDashboardSummary','getTransactionsPage','getTransactions','createTransaction','syncTransaction','updateTransaction','deleteTransaction','rebuildSummaries','exportData'];
   if(!actions.includes(action)) return null;
   const cachedResponse=readApiResponseCache_(action,payload);
   if(cachedResponse!==null)return cachedResponse;
   const lock=LockService.getScriptLock(); lock.waitLock(30000);
   try {
     recoverWrite_();
-    if(action==='storageStatus') return {api_version:2,storage_version:partitioned_()?2:1,backup_url:storageProps_().getProperty('migration_backup_url')||'',migration_pending:!!storageProps_().getProperty('migration_state')&&!partitioned_()};
-    if(['createTransaction','updateTransaction','deleteTransaction'].includes(action)) return mutateTx_(action,payload);
+    if(action==='storageStatus') return {api_version:3,storage_version:partitioned_()?2:1,backup_url:storageProps_().getProperty('migration_backup_url')||'',migration_pending:!!storageProps_().getProperty('migration_state')&&!partitioned_()};
+    if(['createTransaction','syncTransaction','updateTransaction','deleteTransaction'].includes(action)) return mutateTx_(action,payload);
     if(action==='getBootstrapData') {
       const now=new Date(),year=now.getFullYear(),month=now.getMonth()+1;
       const prefix=year+'-'+String(month).padStart(2,'0');
