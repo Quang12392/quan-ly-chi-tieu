@@ -354,7 +354,7 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Lưu tối đa 6 bản xem trước theo tháng trên thiết bị, tách theo URL kết nối và thành viên đăng nhập. Mở lại đúng tháng sẽ hiển thị bản gần nhất ngay trong lúc tải số liệu mới, kèm trạng thái “Đang cập nhật” và thời điểm cập nhật. Lần đầu hoặc tháng chưa có bản lưu vẫn chờ mạng.
 - Bản lưu chỉ dùng để hiển thị, không bao giờ gửi thay thế dữ liệu Google Sheets. Thêm/sửa/xóa giao dịch hoặc thay ngân sách vô hiệu hóa bản lưu. Đăng xuất, đổi kết nối cũng xóa bản lưu; phản hồi đọc bắt đầu trước một thao tác ghi không được ghi lại vào cache.
 - Sau khi thêm giao dịch, Lịch sử lấy lại dữ liệu và cập nhật Tổng quan từ máy chủ. Nếu lưu đã thành công nhưng đọc báo cáo thất bại, hiển thị “Đã lưu giao dịch, chưa cập nhật được báo cáo”; nút cập nhật chỉ gửi yêu cầu đọc, không gửi lại giao dịch.
-- Khi quay lại app từ nền hoặc có mạng trở lại, Tổng quan cập nhật ngầm nếu bản xem trước đã cũ ít nhất 60 giây. Không phải đồng bộ đẩy thời gian thực: giao dịch vừa nhập trên máy còn lại có thể chưa hiện trên bản xem trước cho đến khi tải xong. Luôn có nút Cập nhật và thời điểm đồng bộ để người dùng nhận biết.
+- Khi quay lại app từ nền hoặc có mạng trở lại, Tổng quan cập nhật ngầm nếu bản xem trước đã cũ ít nhất 300 giây. Không phải đồng bộ đẩy thời gian thực: giao dịch vừa nhập trên máy còn lại có thể chưa hiện trên bản xem trước cho đến khi tải xong. Luôn có nút Cập nhật và thời điểm đồng bộ để người dùng nhận biết.
 - Yêu cầu đọc có giới hạn chờ 20 giây; ghi 45 giây. Nếu ghi hết thời gian chờ, kết quả có thể đã được ghi ở máy chủ: app yêu cầu kiểm tra Lịch sử trước khi lưu lại và không tự gửi lại giao dịch.
 - Chạy `npm run test:startup` để kiểm tra một yêu cầu mở Tổng quan, phân tách cache, hai máy nhập nối tiếp, đọc cũ hoàn tất sau ghi, lỗi mạng, timeout và bộ nhớ trình duyệt đầy.
 
@@ -365,7 +365,7 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Bản xem trước được tách theo kết nối, thành viên, tháng và toàn bộ bộ lọc (ngày, loại thu/chi, thành viên, danh mục, tìm kiếm). Lưu tối đa 8 bản cho hai tab; lỗi/quota bộ nhớ không làm hỏng việc tải dữ liệu.
 - Giao dịch chỉ lưu trang đầu tối đa 100 kết quả. Không dùng con trỏ cũ để Xem thêm trước khi xác nhận lại trang đầu từ máy chủ; sau cập nhật thay thế danh sách cũ, không nối trùng trang.
 - Cùng vô hiệu hóa bản lưu với Tổng quan khi ghi dữ liệu, đổi kết nối, đăng xuất. Phản hồi đến muộn sau thao tác ghi không được lưu lại. Nếu tải mới thất bại, giữ bản xem trước cùng thông báo lỗi và nút thử lại.
-- Tự cập nhật khi mở tab, đổi tháng/bộ lọc, quay lại app từ nền hoặc có mạng trở lại nếu chưa có bản xem trước hoặc bản đó đã cũ ít nhất 60 giây. **Không có lịch đồng bộ định kỳ.** Ô tìm kiếm chờ 250ms để giảm yêu cầu khi đang gõ.
+- Tự cập nhật khi mở tab, đổi tháng/bộ lọc, quay lại app từ nền hoặc có mạng trở lại nếu chưa có bản xem trước hoặc bản đó đã cũ ít nhất 300 giây. **Không có lịch đồng bộ định kỳ.** Ô tìm kiếm chờ 250ms để giảm yêu cầu khi đang gõ.
 - Kiểm thử: `npm run test:pages`, `npm run test:startup`, `npm run test:storage`, `npm run build`.
 
 ### 9.6 Danh mục trong form Thêm giao dịch (v2.1.5)
@@ -383,13 +383,19 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 
 ### 9.8 Chống nghẽn khi chuyển tab liên tục (v2.1.7)
 
-- Tổng quan, Giao dịch và Báo cáo coi bản xem trước dưới 60 giây là còn mới. Chuyển qua lại giữa các tab trong khoảng này chỉ đọc dữ liệu trên thiết bị, không tạo thêm yêu cầu Google Sheets.
+- Tổng quan, Giao dịch và Báo cáo coi bản xem trước dưới 300 giây là còn mới. Chuyển qua lại giữa các tab trong khoảng này chỉ đọc dữ liệu trên thiết bị, không tạo thêm yêu cầu Google Sheets.
 - Nút **Cập nhật** luôn tải ngay theo yêu cầu. Thêm, sửa, xóa giao dịch hoặc thay ngân sách vẫn vô hiệu hóa cache, nên lần đọc cần thiết tiếp theo không bị bỏ qua.
 - Các yêu cầu đọc giống hệt nhau đang chạy đồng thời được gộp thành một yêu cầu mạng. Khi có thao tác ghi, yêu cầu đọc đang theo dõi không được tái sử dụng cho dữ liệu mới.
-- Khi mở lại ứng dụng hoặc có mạng trở lại, hệ thống chỉ cập nhật ngầm nếu dữ liệu đã cũ. Đây là ngưỡng độ mới, không phải lịch gọi máy chủ mỗi 60 giây.
+- Khi mở lại ứng dụng hoặc có mạng trở lại, hệ thống chỉ cập nhật ngầm nếu dữ liệu đã cũ. Đây là ngưỡng độ mới, không phải lịch gọi máy chủ mỗi 300 giây.
 
 ### 9.9 Hiển thị ngay danh mục vừa thay đổi (v2.1.8)
 
 - Khi thêm danh mục thành công, ứng dụng ghép danh mục do máy chủ vừa trả về vào danh sách và bản xem trước trên thiết bị. Form hiển thị danh mục mới ngay, không gửi thêm một yêu cầu đọc Google Sheets.
 - Khi đổi tên hoặc ẩn/hiện danh mục thành công, danh sách trên form cũng được cập nhật trực tiếp. Các cache Tổng quan, Giao dịch và Báo cáo vẫn bị vô hiệu hóa để lần mở cần thiết tiếp theo phản ánh thay đổi.
 - Danh mục được thêm từ thiết bị khác hoặc chỉnh trực tiếp trong Google Sheets không có cơ chế đẩy thời gian thực; thiết bị hiện tại nhận thay đổi khi tải lại danh mục hoặc khi dữ liệu hết thời gian còn mới.
+
+### 9.10 Ngưỡng cập nhật tự động 5 phút (v2.1.9)
+
+- Ngưỡng dữ liệu còn mới của Tổng quan, Giao dịch và Báo cáo là 300 giây. Hết 300 giây không tự tạo request theo đồng hồ; hệ thống chỉ kiểm tra ngưỡng khi mở tab, quay lại ứng dụng hoặc có mạng trở lại.
+- Một giao dịch được thêm/sửa/xóa trên thiết bị hiện tại sẽ vô hiệu hóa cache ngay. Sau khi ghi thành công, thiết bị đó đọc lại Lịch sử và Tổng quan từ máy chủ, không chờ hết 300 giây.
+- Thiết bị khác không nhận thông báo đẩy. Nó tiếp tục hiển thị bản xem trước của mình nếu bản đó còn dưới 300 giây; bấm **Cập nhật** để lấy ngay, hoặc mở/quay lại tab sau khi bản xem trước đã cũ để kích hoạt cập nhật nền.

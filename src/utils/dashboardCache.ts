@@ -4,7 +4,7 @@ export interface DashboardSnapshot { summary: DashboardSummary; categories: Cate
 export const DASHBOARD_CACHE_KEY = 'fam_exp_dashboard_preview_v1';
 export const PAGE_CACHE_KEY = 'fam_exp_page_preview_v1';
 export const DASHBOARD_REVISION_KEY = 'fam_exp_dashboard_revision';
-export const AUTO_REFRESH_MAX_AGE_MS = 60000;
+export const AUTO_REFRESH_MAX_AGE_MS = 300000;
 
 export function isPreviewFresh(savedAt: number | undefined, now = Date.now()): boolean {
   return Number.isFinite(savedAt) && savedAt! <= now && now - savedAt! < AUTO_REFRESH_MAX_AGE_MS;
