@@ -33,6 +33,12 @@ const STORAGE_KEYS = {
   CATEGORY_PREVIEW: 'fam_exp_category_preview_v1',
 };
 
+// Apps Script may legally spend up to 30 seconds waiting for its server-side lock.
+// Keep the browser timeout above that window so it does not abandon a request
+// which is still queued and then start another overlapping server execution.
+const READ_TIMEOUT_MS = 60000;
+const WRITE_TIMEOUT_MS = 60000;
+
 class ApiClient {
   private metadata = new Map<string, { expires: number; value: Promise<unknown> }>();
   private pendingReads = new Map<string, Promise<unknown>>();
@@ -175,7 +181,7 @@ class ApiClient {
     const write = /^(create|update|delete|save|rebuild|sync)/.test(action);
     const execute = async (): Promise<T> => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), write ? 45000 : 20000);
+      const timeout = setTimeout(() => controller.abort(), write ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS);
       try {
         // Use text/plain to avoid CORS preflight OPTIONS check in Google Apps Script
         const response = await fetch(url, {
@@ -200,7 +206,7 @@ class ApiClient {
       } catch (err: unknown) {
         if (controller.signal.aborted) throw new Error(write
           ? 'Chưa xác nhận được kết quả lưu. Hãy kiểm tra Lịch sử giao dịch trước khi thử lưu lại.'
-          : 'Google Sheets phản hồi quá lâu. Vui lòng thử cập nhật lại.');
+          : 'Google Sheets chưa phản hồi sau 60 giây. Vui lòng đợi vài giây rồi cập nhật lại.');
         const msg = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
         throw new Error(msg);
       } finally {

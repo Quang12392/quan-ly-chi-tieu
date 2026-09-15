@@ -46,9 +46,9 @@ store.set('fam_exp_dashboard_preview_v1','{invalid');assert.equal(api.getCachedD
 global.fetch=async()=>({ok:true,json:async()=>({ok:true,data:{categories:[],year:2026,month:9}})});
 await assert.rejects(()=>api.getDashboardSnapshot(2026,9),/không hợp lệ/);
 // Read timeout is bounded, and performs no retry or write.
-const originalTimeout=global.setTimeout;global.setTimeout=(fn,ms,...args)=>originalTimeout(fn,ms===20000?1:ms,...args);
+const originalTimeout=global.setTimeout;global.setTimeout=(fn,ms,...args)=>originalTimeout(fn,ms===60000?1:ms,...args);
 let timeouts=0;global.fetch=async(_url,opts)=>{timeouts++;return new Promise((_resolve,reject)=>opts.signal.addEventListener('abort',()=>reject(Error('aborted'))));};
-await assert.rejects(()=>api.getDashboardSnapshot(2026,9),/phản hồi quá lâu/);assert.equal(timeouts,1);global.setTimeout=originalTimeout;
+await assert.rejects(()=>api.getDashboardSnapshot(2026,9),/chưa phản hồi sau 60 giây/);assert.equal(timeouts,1);global.setTimeout=originalTimeout;
 // A full browser storage cannot turn a valid server read into a failure.
 global.fetch=fetchNormal;localStorage.setItem=()=>{throw Error('quota');};assert.equal((await api.getDashboardSnapshot(2026,9)).summary.total_expense,2550000);
 console.log('Fast startup tests passed: single request, cache isolation, concurrent family writes, invalidation races, timeout, quota and offline.');

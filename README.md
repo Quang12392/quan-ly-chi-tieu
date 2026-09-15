@@ -357,7 +357,7 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Bản lưu chỉ dùng để hiển thị, không bao giờ gửi thay thế dữ liệu Google Sheets. Thêm/sửa/xóa giao dịch hoặc thay ngân sách vô hiệu hóa bản lưu. Đăng xuất, đổi kết nối cũng xóa bản lưu; phản hồi đọc bắt đầu trước một thao tác ghi không được ghi lại vào cache.
 - Sau khi thêm giao dịch, Lịch sử lấy lại dữ liệu và cập nhật Tổng quan từ máy chủ. Nếu lưu đã thành công nhưng đọc báo cáo thất bại, hiển thị “Đã lưu giao dịch, chưa cập nhật được báo cáo”; nút cập nhật chỉ gửi yêu cầu đọc, không gửi lại giao dịch.
 - Khi quay lại app từ nền hoặc có mạng trở lại, Tổng quan cập nhật ngầm nếu bản xem trước đã cũ ít nhất 300 giây. Không phải đồng bộ đẩy thời gian thực: giao dịch vừa nhập trên máy còn lại có thể chưa hiện trên bản xem trước cho đến khi tải xong. Luôn có nút Cập nhật và thời điểm đồng bộ để người dùng nhận biết.
-- Yêu cầu đọc có giới hạn chờ 20 giây; ghi 45 giây. Nếu ghi hết thời gian chờ, kết quả có thể đã được ghi ở máy chủ: app yêu cầu kiểm tra Lịch sử trước khi lưu lại và không tự gửi lại giao dịch.
+- Yêu cầu đọc và ghi có giới hạn chờ 60 giây. Mốc này dài hơn thời gian Google Apps Script có thể chờ khóa máy chủ (30 giây), tránh trình duyệt hủy sớm rồi tạo một lượt xử lý chồng lên tiến trình vẫn đang chạy ở Google. Nếu ghi hết thời gian chờ, kết quả có thể đã được ghi ở máy chủ: app giữ mã lệnh để kiểm tra và đồng bộ lại an toàn.
 - Chạy `npm run test:startup` để kiểm tra một yêu cầu mở Tổng quan, phân tách cache, hai máy nhập nối tiếp, đọc cũ hoàn tất sau ghi, lỗi mạng, timeout và bộ nhớ trình duyệt đầy.
 
 
@@ -412,3 +412,8 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 ### 9.12 Hiển thị đầy đủ chi tiêu theo danh mục (v2.2.1)
 
 - Phần **Top chi tiêu theo danh mục** trên Tổng quan hiển thị toàn bộ danh mục có phát sinh chi trong tháng, theo thứ tự số tiền giảm dần; không còn giới hạn 5 danh mục.
+
+### 9.13 Đồng bộ thời gian chờ trình duyệt và Apps Script (v2.2.2)
+
+- Apps Script có thể chờ `LockService` tối đa 30 giây trước khi bắt đầu đọc hoặc ghi. Trình duyệt trước đây dừng yêu cầu đọc ở giây thứ 20, nhưng việc dừng `fetch` không chắc dừng tiến trình đang chạy trên máy chủ Google; yêu cầu sau đó có thể tiếp tục phải chờ tiến trình cũ dù chỉ dùng một thiết bị và một tab.
+- Thời gian chờ phía trình duyệt được nâng lên 60 giây cho cả đọc và ghi. Trong thời gian đó giao diện giữ trạng thái đang tải và không gửi thêm yêu cầu giống nhau; khi hết thời gian mới hiện lỗi cùng nút cập nhật lại.
