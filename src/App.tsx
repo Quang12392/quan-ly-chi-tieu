@@ -1,3 +1,4 @@
+import { CategoryTrendPage } from './pages/CategoryTrendPage';
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -38,6 +39,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="transactions" element={<TransactionsPage />} />
         <Route path="add" element={<AddTransactionPage />} />
         <Route path="reports" element={<ReportsPage />} />
+        <Route path="reports/categories/:categoryId" element={<CategoryTrendPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

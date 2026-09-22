@@ -1,7 +1,7 @@
 {
   "name": "family-expense-manager",
   "private": true,
-  "version": "2.2.2",
+  "version": "2.2.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test:storage": "node tests/client-storage.mjs && node tests/budgets.mjs",
     "test:startup": "node tests/dashboard-cache.mjs",
-    "test:pages": "node tests/page-cache.mjs && node tests/pending-transaction.mjs"
+    "test:pages": "node tests/page-cache.mjs && node tests/pending-transaction.mjs",
+    "test:category-trend": "node tests/category-trend.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -1,3 +1,4 @@
+import { CategoryTrend, categoryTrend, validCategoryTrend } from '../utils/categoryTrend';
 import { PageSnapshot, readPageCache, writePageCache, DashboardSnapshot, clearDashboardCache, dashboardRevision, readDashboardCache, writeDashboardCache, validDashboard } from '../utils/dashboardCache';
 import { summarizeTransactions } from '../utils/summary';
 import { TransactionQuery, TransactionPage, ReportBundle, StorageStatus } from '../types';
@@ -654,6 +655,21 @@ class ApiClient {
       expense: s.total_expense,
       balance: s.balance,
     }));
+  }
+
+  getCachedCategoryTrend(categoryId: string, year: number): PageSnapshot<CategoryTrend> | null {
+    return readPageCache(this.dashboardScope(),JSON.stringify(['categoryTrend',categoryId,year]),validCategoryTrend);
+  }
+  async getCategoryTrend(categoryId: string, year: number): Promise<PageSnapshot<CategoryTrend>> {
+    const scope=this.dashboardScope(), revision=dashboardRevision();
+    const transactions=await this.getTransactions({from:`${year}-01-01`,through:`${year}-12-31`,type:'expense',category_id:categoryId});
+    if (!Array.isArray(transactions)) throw new Error('Không thể đọc chi tiêu của danh mục.');
+    const data=categoryTrend(transactions,categoryId,year);
+    if (!validCategoryTrend(data)) throw new Error('Số liệu danh mục không hợp lệ.');
+    if (scope!==this.dashboardScope() || revision!==dashboardRevision()) throw new Error('Dữ liệu vừa thay đổi. Vui lòng cập nhật lại.');
+    const snapshot={data,savedAt:Date.now()};
+    writePageCache(scope,JSON.stringify(['categoryTrend',categoryId,year]),snapshot);
+    return snapshot;
   }
 
   transactionViewKey(query: TransactionQuery): string {

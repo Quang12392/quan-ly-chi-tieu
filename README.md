@@ -417,3 +417,12 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 
 - Apps Script có thể chờ `LockService` tối đa 30 giây trước khi bắt đầu đọc hoặc ghi. Trình duyệt trước đây dừng yêu cầu đọc ở giây thứ 20, nhưng việc dừng `fetch` không chắc dừng tiến trình đang chạy trên máy chủ Google; yêu cầu sau đó có thể tiếp tục phải chờ tiến trình cũ dù chỉ dùng một thiết bị và một tab.
 - Thời gian chờ phía trình duyệt được nâng lên 60 giây cho cả đọc và ghi. Trong thời gian đó giao diện giữ trạng thái đang tải và không gửi thêm yêu cầu giống nhau; khi hết thời gian mới hiện lỗi cùng nút cập nhật lại.
+
+
+### Xu hướng riêng theo danh mục (v2.2.3)
+
+- Bấm một dòng trong Cơ cấu chi tiêu theo danh mục để mở trang `#/reports/categories/:categoryId?year=YYYY&month=M`.
+- Một biểu đồ đường duy nhất T1–T12 vừa màn hình điện thoại. Mỗi tháng có một chấm; chạm vùng tháng/chấm để xem số tiền chính xác bên dưới, không ghi toàn bộ giá trị trên đường. Có chuyển năm, tổng chi cả năm, nút quay lại Báo cáo giữ tháng/năm đang xem.
+- Dùng API getTransactions hiện có, lọc khoản chi theo đúng danh mục và khoảng 01/01–31/12 của năm chọn; không tải lịch sử tất cả các năm và không cần cập nhật Apps Script. Tổng hợp 12 tháng trên frontend, loại giao dịch xóa mềm và khoản thu. Khi có API tổng hợp riêng cho danh mục, có thể thay nguồn dữ liệu mà không đổi giao diện.
+- Bản xem trước tách theo danh mục, năm, thành viên và kết nối; dùng cùng cơ chế vô hiệu hóa sau ghi dữ liệu, cập nhật khi mở/quay lại app/có mạng lại, không đồng bộ định kỳ.
+- Kiểm thử: `npm run test:category-trend` và `npm run build`.

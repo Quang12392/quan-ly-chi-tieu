@@ -1,3 +1,4 @@
+import { Link, useSearchParams } from 'react-router-dom';
 import { PageSnapshot, DASHBOARD_REVISION_KEY, isPreviewFresh } from '../utils/dashboardCache';
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
@@ -23,8 +24,11 @@ import {
 
 export const ReportsPage: React.FC = () => {
   const now = new Date();
-  const [currentMonth, setCurrentMonth] = useState(now.getMonth() + 1);
-  const [currentYear, setCurrentYear] = useState(now.getFullYear());
+  const [params] = useSearchParams();
+  const requestedYear = Number(params.get('year'));
+  const requestedMonth = Number(params.get('month'));
+  const [currentMonth, setCurrentMonth] = useState(Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : now.getMonth() + 1);
+  const [currentYear, setCurrentYear] = useState(Number.isInteger(requestedYear) && requestedYear >= 1900 && requestedYear <= 9999 ? requestedYear : now.getFullYear());
   const [activeTab, setActiveTab] = useState<'overview' | 'budgets'>('overview');
 
   const [loading, setLoading] = useState(true);
@@ -366,7 +370,7 @@ export const ReportsPage: React.FC = () => {
                       {summary.category_breakdown.map((item, idx) => {
                         const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
                         return (
-                          <div key={item.category_id} className="py-2.5 flex items-center justify-between text-xs">
+                          <Link key={item.category_id} to={`/reports/categories/${encodeURIComponent(item.category_id)}?year=${currentYear}&month=${currentMonth}`} className="py-2.5 flex items-center justify-between gap-2 text-xs hover:bg-emerald-50 rounded-lg focus-visible:outline-emerald-600" aria-label={`Xem xu hướng ${item.category_name}`} >
                             <div className="flex items-center gap-2">
                               <span
                                 className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -374,11 +378,12 @@ export const ReportsPage: React.FC = () => {
                               />
                               <span className="font-semibold text-slate-800">{item.category_name}</span>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right flex items-center gap-1">
                               <span className="font-bold text-slate-900">{formatCurrency(item.total)}</span>
                               <span className="text-slate-400 ml-1.5 font-medium">({item.percentage}%)</span>
+                              <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                             </div>
-                          </div>
+                          </Link>
                         );
                       })}
                     </div>

@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const compile=async(path)=>(await build({entryPoints:[path],bundle:true,write:false,format:'esm',platform:'node',define:{'import.meta.env':'{}'}})).outputFiles[0].text;
+const {categoryTrend}=await import('data:text/javascript;base64,'+Buffer.from(await compile('src/utils/categoryTrend.ts')).toString('base64'));
+const tx=(id,date,amount,extra={})=>({id,date,amount,type:'expense',category_id:'food',member_id:'wife',created_at:'2026-09-22T00:00:00Z',updated_at:'2026-09-22T00:00:00Z',deleted:false,...extra});
+const list=[tx('1','2026-01-01',100),tx('2','2026-09-12',200),tx('3','2026-09-22',300),tx('4','2026-12-31',400),tx('5','2025-09-22',900),tx('6','2026-09-22',900,{type:'income'}),tx('7','2026-09-22',900,{deleted:true}),tx('8','2026-09-22',900,{category_id:'health'})];
+const trend=categoryTrend(list,'food',2026);assert.equal(trend.months.length,12);assert.equal(trend.months[0],100);assert.equal(trend.months[8],500);assert.equal(trend.months[11],400);assert.equal(trend.total,1000);assert.equal(categoryTrend(list,'food',2028).total,0);
+const storage=new Map([['fam_exp_api_url','https://mock.invalid'],['family_auth_session','husband']]);global.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)};
+const {api}=await import('data:text/javascript;base64,'+Buffer.from(await compile('src/api/client.ts')).toString('base64'));
+let calls=[];
+global.fetch=async(_url,opts)=>{calls.push(JSON.parse(opts.body));return {ok:true,json:async()=>({ok:true,data:list})};};
+await api.getCategoryTrend('food',2026);assert.deepEqual(calls,[{action:'getTransactions',payload:{from:'2026-01-01',through:'2026-12-31',type:'expense',category_id:'food'}}]);assert.equal(api.getCachedCategoryTrend('food',2026).data.total,1000);assert.equal(api.getCachedCategoryTrend('health',2026),null);assert.equal(api.getCachedCategoryTrend('food',2025),null);
+storage.set('family_auth_session','wife');assert.equal(api.getCachedCategoryTrend('food',2026),null);storage.set('family_auth_session','husband');
+global.fetch=async()=>{throw Error('offline')};await assert.rejects(()=>api.getCategoryTrend('food',2026),/offline/);assert.equal(api.getCachedCategoryTrend('food',2026).data.total,1000);
+api.setApiUrl('https://another.invalid');assert.equal(api.getCachedCategoryTrend('food',2026),null);
+console.log('Category trend: 12 months, category/year/type isolation, soft deletes, exact totals, scoped API and preview cache passed.');

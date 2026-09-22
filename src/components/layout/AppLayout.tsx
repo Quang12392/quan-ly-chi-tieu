@@ -7,6 +7,7 @@ export const AppLayout: React.FC = () => {
   const location = useLocation();
 
   const getPageInfo = () => {
+    if (location.pathname.startsWith('/reports/categories/')) return {title:'Xu Hướng Danh Mục',subtitle:'Chi tiêu theo từng tháng trong năm'};
     switch (location.pathname) {
       case '/':
         return { title: 'Tổng Quan Thu Chi', subtitle: 'Tình hình tài chính trong tháng' };
