@@ -39,7 +39,7 @@ Xây dựng một ứng dụng web quản lý tài chính - chi tiêu gia đình
 - Người thực hiện khi mở form thêm giao dịch mặc định theo thành viên đang đăng nhập. Chọn thành viên khác để điền hộ chỉ áp dụng trong lần nhập đó, không lưu thành mặc định cho lần sau.
 - Xem ai là người chi, phân loại chi tiêu theo danh mục.
 - Lịch sử giao dịch hiển thị giờ tạo dưới dòng danh mục, dùng chung giờ Việt Nam và định dạng 24 giờ với Giao dịch gần đây.
-- Biểu đồ đường thu/chi cả năm đang chọn (tháng 1 đến tháng 12): chia thành hai biểu đồ tháng 1–6 và 7–12 xếp dọc, dùng chung thang đo, vừa màn hình điện thoại không cần cuộn ngang; mỗi tháng có chấm và nhãn giá trị làm tròn đến nghìn đồng (22.325.000đ → 22tr325; 384.000đ → 384k).
+- Biểu đồ đường thu/chi cả năm đang chọn (tháng 1 đến tháng 12): từ v2.2.4 hiển thị một biểu đồ T1–T12 vừa màn hình điện thoại; mỗi tháng có chấm và nhãn giá trị làm tròn đến nghìn đồng (22.325.000đ → 22tr325; 384.000đ → 384k).
 - Theo dõi số dư, tỷ lệ tiết kiệm và xu hướng thu chi 6 tháng.
 - Thiết lập hạn mức ngân sách thông minh (tự động kế thừa qua từng tháng).
 - Toàn quyền sở hữu dữ liệu trên Google Sheets cá nhân, không lo mất dữ liệu.
@@ -426,3 +426,10 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Dùng API getTransactions hiện có, lọc khoản chi theo đúng danh mục và khoảng 01/01–31/12 của năm chọn; không tải lịch sử tất cả các năm và không cần cập nhật Apps Script. Tổng hợp 12 tháng trên frontend, loại giao dịch xóa mềm và khoản thu. Khi có API tổng hợp riêng cho danh mục, có thể thay nguồn dữ liệu mà không đổi giao diện.
 - Bản xem trước tách theo danh mục, năm, thành viên và kết nối; dùng cùng cơ chế vô hiệu hóa sau ghi dữ liệu, cập nhật khi mở/quay lại app/có mạng lại, không đồng bộ định kỳ.
 - Kiểm thử: `npm run test:category-trend` và `npm run build`.
+
+
+### Biểu đồ Thu/Chi cả năm gọn trên điện thoại (v2.2.4)
+
+- Xu hướng thu chi năm được gộp thành một biểu đồ T1–T12, không còn hai biểu đồ nửa năm.
+- Giữ đường Thu màu xanh, Chi màu hồng và cùng thang đo. Chạm vùng tháng/chấm để xem số thu và chi chính xác ở phía dưới, không ghi toàn bộ giá trị trên đường. Chọn tháng chỉ thay đổi phần chi tiết biểu đồ, không đổi bộ lọc báo cáo hay gọi API.
+- Mặc định chọn tháng đang xem; đổi tháng/năm báo cáo sẽ cập nhật lựa chọn. Dữ liệu và cơ chế đồng bộ giữ nguyên.

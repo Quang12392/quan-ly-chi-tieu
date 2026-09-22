@@ -29,6 +29,8 @@ export const ReportsPage: React.FC = () => {
   const requestedMonth = Number(params.get('month'));
   const [currentMonth, setCurrentMonth] = useState(Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : now.getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(Number.isInteger(requestedYear) && requestedYear >= 1900 && requestedYear <= 9999 ? requestedYear : now.getFullYear());
+  const [trendMonth, setTrendMonth] = useState(currentMonth);
+  useEffect(() => { setTrendMonth(currentMonth); }, [currentMonth, currentYear]);
   const [activeTab, setActiveTab] = useState<'overview' | 'budgets'>('overview');
 
   const [loading, setLoading] = useState(true);
@@ -269,57 +271,29 @@ export const ReportsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {[yearlyTrend.slice(0, 6), yearlyTrend.slice(6, 12)].map((half, halfIndex) => (
-                <div key={halfIndex} className="min-w-0 space-y-1">
-                  <p className="text-[11px] font-semibold text-slate-500">{halfIndex === 0 ? 'Tháng 1 – 6' : 'Tháng 7 – 12'}</p>
-                  <svg viewBox="0 0 420 230" className="block w-full h-auto" role="img" aria-label="Đường thu màu xanh và đường chi màu hồng, mỗi chấm là một tháng">
-                    <title>Thu chi tháng {halfIndex === 0 ? '1–6' : '7–12'} năm {currentYear}</title>
-                    <desc>{half.map((item) => `${item.label}/${item.year}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`).join('; ')}</desc>
-                    {[40, 75, 110, 145, 180].map((y) => (
-                      <line key={y} x1="42" x2="378" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 5" />
-                    ))}
-                    {(['income', 'expense'] as const).map((series) => (
-                      <polyline
-                        key={series}
-                        points={half.map((item, index) => `${42 + index * 336 / Math.max(1, half.length - 1)},${180 - item[series] / maxTrendVal * 140}`).join(' ')}
-                        fill="none"
-                        stroke={series === 'income' ? '#059669' : '#e11d48'}
-                        strokeWidth="2.5"
-                        strokeLinejoin="round"
-                        strokeLinecap="round"
-                        strokeDasharray={series === 'expense' ? '6 3' : undefined}
-                      />
-                    ))}
-                    {half.map((item, index) => {
-                      const x = 42 + index * 336 / Math.max(1, half.length - 1);
-                      return (
-                        <g key={`${item.year}-${item.month}`}>
-                          {(['income', 'expense'] as const).map((series) => {
-                            const y = 180 - item[series] / maxTrendVal * 140;
-                            const income = series === 'income';
-                            const color = income ? '#059669' : '#e11d48';
-                            const labelAbove = income ? item.income >= item.expense : item.expense > item.income;
-                            return (
-                              <g key={series}>
-                                <circle cx={x} cy={y} r={income ? 5 : 3} fill="white" stroke={color} strokeWidth="2">
-                                  <title>{`${item.label}/${item.year} · ${income ? 'Thu' : 'Chi'}: ${formatCurrency(item[series])}`}</title>
-                                </circle>
-                                <text x={x} y={y + (labelAbove ? -13 : 20)} textAnchor="middle" fill={color} fontSize="13" fontWeight="600" stroke="white" strokeWidth="3" paintOrder="stroke">
-                                  {formatCompactCurrency(item[series])}
-                                </text>
-                              </g>
-                            );
-                          })}
-                          <text x={x} y="223" textAnchor="middle" fontSize="13" fontWeight="600" fill={item.month === currentMonth && item.year === currentYear ? '#047857' : '#64748b'}>
-                            {item.label}
-                          </text>
-                        </g>
-                      );
-                    })}
+                <div className="relative w-full">
+                  <svg viewBox="0 0 360 184" className="block w-full h-auto" role="img" aria-label={`Xu hướng thu chi từ tháng 1 đến tháng 12 năm ${currentYear}`}>
+                    <desc>{yearlyTrend.map(item => `${item.label}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`).join('; ')}</desc>
+                    {[28,62,96,130,164].map(y => <line key={y} x1="15" x2="345" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="3 4" />)}
+                    <line x1={15+(trendMonth-1)*30} x2={15+(trendMonth-1)*30} y1="20" y2="170" stroke="#94a3b8" strokeDasharray="3 3" />
+                    {(['income','expense'] as const).map(series => <g key={series}>
+                      <polyline points={yearlyTrend.map(item => `${15+(item.month-1)*30},${164-item[series]/maxTrendVal*136}`).join(' ')} fill="none" stroke={series==='income'?'#059669':'#e11d48'} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" strokeDasharray={series==='expense'?'5 3':undefined} />
+                      {yearlyTrend.map(item => <circle key={item.month} cx={15+(item.month-1)*30} cy={164-item[series]/maxTrendVal*136} r={series==='income'?5:3} fill={item.month===trendMonth?(series==='income'?'#059669':'#e11d48'):'white'} stroke={series==='income'?'#059669':'#e11d48'} strokeWidth="2" />)}
+                    </g>)}
                   </svg>
+                  <div className="absolute inset-0 grid grid-cols-12">
+                    {yearlyTrend.map(item => <button key={item.month} aria-label={`Tháng ${item.month}: Thu ${formatCurrency(item.income)}, Chi ${formatCurrency(item.expense)}`} aria-pressed={trendMonth===item.month} onClick={()=>setTrendMonth(item.month)} className="rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600" />)}
+                  </div>
                 </div>
-                ))}
-                <p className="text-[10px] text-slate-400">Giá trị làm tròn đến nghìn đồng · 22tr325 = 22.325.000đ. Hai biểu đồ dùng chung thang đo.</p>
+                <div className="grid grid-cols-12 text-center text-[10px] text-slate-500" aria-hidden="true">{yearlyTrend.map(item => <span key={item.month} className={trendMonth===item.month?'font-bold text-emerald-700':''}>{item.label}</span>)}</div>
+                <div className="rounded-2xl bg-slate-50 p-3 space-y-2" aria-live="polite">
+                  <p className="text-xs text-slate-600 text-center">Tháng {trendMonth}/{currentYear}</p>
+                  <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                    <div><p className="text-slate-500">Thu</p><p className="font-bold text-emerald-700 break-words">{formatCurrency(yearlyTrend.find(item=>item.month===trendMonth)?.income || 0)}</p></div>
+                    <div><p className="text-slate-500">Chi</p><p className="font-bold text-rose-600 break-words">{formatCurrency(yearlyTrend.find(item=>item.month===trendMonth)?.expense || 0)}</p></div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 text-center">Chạm vào chấm hoặc vùng của tháng để xem số thu và chi.</p>
               </div>
 
               <div className="bg-white rounded-3xl p-4 border border-slate-200/80 space-y-3">
