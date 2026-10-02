@@ -388,10 +388,6 @@ export const AddTransactionPage: React.FC = () => {
 
         {/* Less frequently changed transaction details */}
         <div className="pt-1 border-t border-slate-100 space-y-3">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-            Thông tin mặc định
-          </p>
-
           {/* Member selection */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
