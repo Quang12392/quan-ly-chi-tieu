@@ -13,7 +13,7 @@ import {
   savePendingTransaction,
 } from '../utils/pendingTransaction';
 import { CategoryManagerModal } from '../components/categories/CategoryManagerModal';
-import { Check, Loader2, ArrowLeft, Settings2, RefreshCw } from 'lucide-react';
+import { Check, Loader2, Settings2, RefreshCw } from 'lucide-react';
 
 export const AddTransactionPage: React.FC = () => {
   const navigate = useNavigate();
@@ -216,22 +216,13 @@ export const AddTransactionPage: React.FC = () => {
   const filteredCategories = categories.filter((c) => c.type === type && c.active);
 
   return (
-    <div className="space-y-4">
-      {/* Top back button */}
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Quay lại</span>
-      </button>
-
+    <div className="space-y-2">
       {/* Type Toggle: Chi tiêu vs Thu nhập */}
-      <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-200/70 rounded-2xl">
+      <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-2xl">
         <button
           type="button"
           onClick={() => setType('expense')}
-          className={`py-2.5 rounded-xl font-bold text-sm transition ${
+          className={`py-1.5 rounded-xl font-bold text-sm transition ${
             type === 'expense'
               ? 'bg-white text-rose-600 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'
@@ -242,7 +233,7 @@ export const AddTransactionPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setType('income')}
-          className={`py-2.5 rounded-xl font-bold text-sm transition ${
+          className={`py-1.5 rounded-xl font-bold text-sm transition ${
             type === 'income'
               ? 'bg-white text-emerald-600 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'

@@ -439,3 +439,8 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Form Thêm giao dịch vẫn tự đặt con trỏ vào ô Số tiền và mở bàn phím số để nhập nhanh.
 - Ba trường thường xuyên thay đổi được đặt liền nhau theo thứ tự **Số tiền → Danh mục → Ghi chú**, giúp Danh mục và Ghi chú không còn bị Người thực hiện đẩy xuống dưới khi bàn phím số đang mở.
 - Người thực hiện và Ngày giao dịch được chuyển xuống nhóm **Thông tin mặc định**. Giá trị mặc định và toàn bộ quy tắc lưu giao dịch giữ nguyên; người dùng vẫn có thể đổi khi cần.
+
+### Thu gọn đầu trang Thêm giao dịch (v2.2.6)
+
+- Bỏ nút **Quay lại** trên form Thêm giao dịch.
+- Giảm chiều cao cụm **Khoản Chi / Khoản Thu** từ 52px xuống 40px và khoảng cách đến form nhập liệu từ 16px xuống 8px, dành thêm chỗ cho các trường thường dùng trên điện thoại.
