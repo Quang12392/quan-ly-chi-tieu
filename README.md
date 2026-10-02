@@ -433,3 +433,9 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Xu hướng thu chi năm được gộp thành một biểu đồ T1–T12, không còn hai biểu đồ nửa năm.
 - Giữ đường Thu màu xanh, Chi màu hồng và cùng thang đo. Chạm vùng tháng/chấm để xem số thu và chi chính xác ở phía dưới, không ghi toàn bộ giá trị trên đường. Chọn tháng chỉ thay đổi phần chi tiết biểu đồ, không đổi bộ lọc báo cáo hay gọi API.
 - Mặc định chọn tháng đang xem; đổi tháng/năm báo cáo sẽ cập nhật lựa chọn. Dữ liệu và cơ chế đồng bộ giữ nguyên.
+
+### Bố cục nhập giao dịch ưu tiên thao tác thường dùng (v2.2.5)
+
+- Form Thêm giao dịch vẫn tự đặt con trỏ vào ô Số tiền và mở bàn phím số để nhập nhanh.
+- Ba trường thường xuyên thay đổi được đặt liền nhau theo thứ tự **Số tiền → Danh mục → Ghi chú**, giúp Danh mục và Ghi chú không còn bị Người thực hiện đẩy xuống dưới khi bàn phím số đang mở.
+- Người thực hiện và Ngày giao dịch được chuyển xuống nhóm **Thông tin mặc định**. Giá trị mặc định và toàn bộ quy tắc lưu giao dịch giữ nguyên; người dùng vẫn có thể đổi khi cần.

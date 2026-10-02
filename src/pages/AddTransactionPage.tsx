@@ -20,6 +20,7 @@ export const AddTransactionPage: React.FC = () => {
   const { key: entryKey } = useLocation();
   const { currentUser } = useAuth();
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const frequentFieldsRef = useRef<HTMLDivElement>(null);
   const submitGuardRef = useRef(false);
   const writeScope = api.getTransactionWriteScope(currentUser || undefined);
   const initialPendingRef = useRef<PendingTransactionWrite | null>(readPendingTransaction(writeScope));
@@ -79,6 +80,27 @@ export const AddTransactionPage: React.FC = () => {
       ? current
       : (available[0]?.id || ''));
   }, [categories, type]);
+
+  // Keep the frequently changed fields above the mobile keyboard.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    let animationFrame = 0;
+    const keepFrequentFieldsVisible = () => {
+      if (document.activeElement !== amountInputRef.current) return;
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        frequentFieldsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+    };
+
+    viewport.addEventListener('resize', keepFrequentFieldsVisible);
+    return () => {
+      viewport.removeEventListener('resize', keepFrequentFieldsVisible);
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, []);
 
   // Auto-focus amount input on page load
   useEffect(() => {
@@ -262,7 +284,7 @@ export const AddTransactionPage: React.FC = () => {
         <fieldset disabled={submitting || success || !!pendingWrite} className="contents">
 
         {/* Amount Input */}
-        <div className="space-y-1.5">
+        <div ref={frequentFieldsRef} className="space-y-1.5 scroll-mt-20">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Số tiền (VNĐ)
           </label>
@@ -302,37 +324,6 @@ export const AddTransactionPage: React.FC = () => {
                 Xóa
               </button>
             )}
-          </div>
-        </div>
-
-        {/* Member selection */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Người thực hiện
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setMemberId('husband')}
-              className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition ${
-                memberId === 'husband'
-                  ? 'bg-blue-50 border-blue-500 text-blue-700'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Chồng
-            </button>
-            <button
-              type="button"
-              onClick={() => setMemberId('wife')}
-              className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition ${
-                memberId === 'wife'
-                  ? 'bg-pink-50 border-pink-500 text-pink-700'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Vợ
-            </button>
           </div>
         </div>
 
@@ -390,19 +381,6 @@ export const AddTransactionPage: React.FC = () => {
           )}
         </div>
 
-        {/* Date picker */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Ngày giao dịch
-          </label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-          />
-        </div>
-
         {/* Note input (optional) */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -415,6 +393,57 @@ export const AddTransactionPage: React.FC = () => {
             placeholder="Ví dụ: Ăn tối, Mua sữa cho con..."
             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white placeholder:text-slate-400"
           />
+        </div>
+
+        {/* Less frequently changed transaction details */}
+        <div className="pt-1 border-t border-slate-100 space-y-3">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            Thông tin mặc định
+          </p>
+
+          {/* Member selection */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Người thực hiện
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMemberId('husband')}
+                className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition ${
+                  memberId === 'husband'
+                    ? 'bg-blue-50 border-blue-500 text-blue-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Chồng
+              </button>
+              <button
+                type="button"
+                onClick={() => setMemberId('wife')}
+                className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition ${
+                  memberId === 'wife'
+                    ? 'bg-pink-50 border-pink-500 text-pink-700'
+                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Vợ
+              </button>
+            </div>
+          </div>
+
+          {/* Date picker */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Ngày giao dịch
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+            />
+          </div>
         </div>
 
         {/* Submit button */}
