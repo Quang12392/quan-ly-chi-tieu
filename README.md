@@ -467,3 +467,11 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - **Nhập giao dịch:** mất mạng hoặc mạng chập chờn → giao dịch vào hàng đợi `fam_exp_offline_queue_v1` (riêng theo URL + thành viên), form trống lại để nhập tiếp. Khi có mạng / mở lại app, `OfflineStatus` gửi lần lượt bằng `syncTransaction` cùng `request_id` nên không bị ghi trùng. Lỗi do máy chủ từ chối thì dừng lại, hiện lỗi và cho bỏ giao dịch đó.
 - Giao dịch đang chờ gửi chưa xuất hiện trong Tổng quan / Lịch sử cho tới khi gửi xong.
 - Điện thoại cần mở app **một lần khi có mạng** sau khi cập nhật để lưu giao diện mới.
+
+### Lưu trên máy trước, gửi ngầm lên Sheets (v2.5.0)
+
+- Khi đã kết nối Google Sheets, bấm **Lưu** luôn ghi giao dịch vào hàng đợi trên máy (`fam_exp_offline_queue_v1`) rồi chuyển ngay sang Lịch sử; `OfflineStatus` gửi ngầm bằng `syncTransaction` với `request_id` (id trên Sheets là `txr_<request_id>`, gửi lại không bị trùng). Không còn phải chờ Sheets 2–5 giây.
+- Giao dịch đang gửi hiện ngay trong **Lịch sử** (nhãn "Đang gửi…"), được cộng vào số dư, tổng thu/chi, ngân sách, chi theo danh mục/thành viên và "Giao dịch gần đây" ở **Tổng quan** và **Báo cáo**. Chưa sửa/xóa được cho tới khi gửi xong.
+- Gửi xong, hàng đợi giữ mục đó (đánh dấu `syncedAt`, tối đa 10 phút) cho tới khi trang tải xong số liệu mới hơn lúc gửi, để giao dịch không "nháy" biến mất; các trang tự tải lại qua sự kiện `fam-data-synced`.
+- Mất mạng: các trang không hiện hộp lỗi đỏ nữa, chỉ ghi "Chưa có mạng · đang hiển thị dữ liệu đã lưu" (thanh vàng chung đã báo).
+- Lệnh chưa xác nhận từ bản cũ (`fam_exp_pending_transaction_v1`) được tự chuyển vào hàng đợi.

@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CloudOff, Loader2, RefreshCw } from 'lucide-react';
 import { api, isOffline } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { DASHBOARD_REVISION_KEY } from '../../utils/dashboardCache';
 import { formatNumberWithDots } from '../../utils/formatters';
 import {
+  DATA_SYNCED_EVENT,
   flushTransactionQueue,
   OFFLINE_QUEUE_EVENT,
+  QUEUE_FLUSH_EVENT,
   queuedTransactions,
   removeQueuedTransaction,
 } from '../../utils/offlineQueue';
@@ -28,12 +29,14 @@ export const OfflineStatus: React.FC = () => {
   const flush = useCallback(async () => {
     if (!api.isLiveMode() || isOffline() || !queuedTransactions(scope).length) return;
     setSyncing(true);
+    // Chỉ báo "đã gửi" khi có giao dịch phải chờ lâu (lúc mất mạng); lưu bình thường thì im lặng.
+    const waitedLong = queuedTransactions(scope).some((item) => Date.now() - item.savedAt > 15000);
     try {
       const result = await flushTransactionQueue(scope, (payload, requestId) => api.syncTransaction(payload, requestId));
       if (result.sent > 0) {
-        setSentNotice(`Đã gửi ${result.sent} giao dịch nhập lúc offline lên Google Sheets.`);
-        // Báo các trang Tổng quan / Lịch sử tải lại số liệu mới.
-        window.dispatchEvent(new StorageEvent('storage', { key: DASHBOARD_REVISION_KEY }));
+        if (waitedLong) setSentNotice(`Đã gửi ${result.sent} giao dịch lên Google Sheets.`);
+        // Báo các trang tải lại số liệu mới (giữ nguyên phần đang hiển thị trong lúc tải).
+        window.dispatchEvent(new Event(DATA_SYNCED_EVENT));
       }
     } finally {
       setSyncing(false);
@@ -48,12 +51,15 @@ export const OfflineStatus: React.FC = () => {
     const visible = () => { if (document.visibilityState === 'visible') online(); };
     window.addEventListener('online', online);
     window.addEventListener('offline', refresh);
+    const flushNow = () => { void flush(); };
     window.addEventListener(OFFLINE_QUEUE_EVENT, refresh);
+    window.addEventListener(QUEUE_FLUSH_EVENT, flushNow);
     document.addEventListener('visibilitychange', visible);
     return () => {
       window.removeEventListener('online', online);
       window.removeEventListener('offline', refresh);
       window.removeEventListener(OFFLINE_QUEUE_EVENT, refresh);
+      window.removeEventListener(QUEUE_FLUSH_EVENT, flushNow);
       document.removeEventListener('visibilitychange', visible);
     };
   }, [refresh, flush]);
@@ -87,7 +93,7 @@ export const OfflineStatus: React.FC = () => {
 
   const error = !offline && !syncing ? queue[0].lastError : undefined;
   return (
-    <div className="mx-4 mt-3 px-3 py-2 rounded-xl text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200 space-y-1.5">
+    <div className={`mx-4 mt-3 px-3 py-2 rounded-xl text-[11px] font-medium border space-y-1.5 ${syncing && !offline ? 'bg-sky-50 text-sky-800 border-sky-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
       <div className="flex items-center gap-2">
         {syncing ? <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" /> : <CloudOff className="w-3.5 h-3.5 shrink-0" />}
         <span className="flex-1">

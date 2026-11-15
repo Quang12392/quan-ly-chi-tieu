@@ -1,10 +1,13 @@
 import { DashboardSnapshot, DASHBOARD_REVISION_KEY, isPreviewFresh } from '../utils/dashboardCache';
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, isNetworkError } from '../api/client';
 import { Transaction } from '../types';
 import { formatCurrency, formatTransactionDateTime } from '../utils/formatters';
 import { EditTransactionModal } from '../components/transactions/EditTransactionModal';
+import { useAuth } from '../context/AuthContext';
+import { applyPendingToSummary, DATA_SYNCED_EVENT, isPendingTransaction } from '../utils/offlineQueue';
+import { usePendingTransactions } from '../utils/usePendingTransactions';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -33,8 +36,12 @@ export const DashboardPage: React.FC = () => {
   const [currentYear, setCurrentYear] = useState(currentActualYear);
 
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(() => api.getCachedDashboard(currentYear, currentMonth));
-  const summary = snapshot?.summary.year === currentYear && snapshot.summary.month === currentMonth ? snapshot.summary : null;
-  const categories = summary ? snapshot!.categories : [];
+  const { currentUser } = useAuth();
+  const loadedSummary = snapshot?.summary.year === currentYear && snapshot.summary.month === currentMonth ? snapshot.summary : null;
+  const categories = loadedSummary ? snapshot!.categories : [];
+  // Cộng ngay giao dịch vừa lưu trên máy (đang gửi ngầm) vào số liệu đang hiển thị.
+  const pendingTxs = usePendingTransactions(api.getTransactionWriteScope(currentUser || undefined), snapshot?.savedAt);
+  const summary = loadedSummary ? applyPendingToSummary(loadedSummary, pendingTxs, categories) : null;
   const [syncError, setSyncError] = useState('');
   const requestVersion = useRef(0);
   const refreshing = useRef(false);
@@ -49,7 +56,9 @@ export const DashboardPage: React.FC = () => {
       const fresh = await api.getDashboardSnapshot(currentYear, currentMonth);
       if (version === requestVersion.current) setSnapshot(fresh);
     } catch (err) {
-      if (version === requestVersion.current) setSyncError(saved
+      if (version === requestVersion.current) setSyncError(isNetworkError(err)
+        ? 'Chưa có mạng · đang hiển thị dữ liệu đã lưu.'
+        : saved
         ? 'Đã lưu giao dịch, chưa cập nhật được báo cáo. Bấm cập nhật để lấy số mới.'
         : err instanceof Error ? err.message : 'Chưa cập nhật được số liệu.');
     } finally {
@@ -73,14 +82,17 @@ export const DashboardPage: React.FC = () => {
     const changed = (event: StorageEvent) => {
       if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); }
     };
+    const synced = () => { void loadData(); };
     window.addEventListener('online', resume);
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('storage', changed);
+    window.addEventListener(DATA_SYNCED_EVENT, synced);
     return () => {
       requestVersion.current++;
       window.removeEventListener('online', resume);
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('storage', changed);
+      window.removeEventListener(DATA_SYNCED_EVENT, synced);
     };
   }, [currentMonth, currentYear]);
 
@@ -402,9 +414,9 @@ export const DashboardPage: React.FC = () => {
                 {summary.recent_transactions.map((tx) => (
                   <div
                     key={tx.id}
-                    onClick={() => setEditingTx(tx)}
-                    className="py-2.5 flex items-center justify-between hover:bg-slate-50/80 transition rounded-xl px-2 cursor-pointer active:bg-slate-100"
-                    title="Bấm để chỉnh sửa giao dịch này"
+                    onClick={() => { if (!isPendingTransaction(tx)) setEditingTx(tx); }}
+                    className={`py-2.5 flex items-center justify-between transition rounded-xl px-2 ${isPendingTransaction(tx) ? 'bg-sky-50/40' : 'hover:bg-slate-50/80 cursor-pointer active:bg-slate-100'}`}
+                    title={isPendingTransaction(tx) ? 'Đang gửi lên Google Sheets' : 'Bấm để chỉnh sửa giao dịch này'}
                   >
                     <div>
                       <div className="text-xs font-semibold text-slate-800">
@@ -415,6 +427,9 @@ export const DashboardPage: React.FC = () => {
                         <span className={tx.member_id === 'husband' ? 'text-blue-600 font-medium' : 'text-pink-600 font-medium'}>
                           {tx.member_id === 'husband' ? 'Chồng' : 'Vợ'}
                         </span>
+                        {isPendingTransaction(tx) && (
+                          <span className={tx.pendingError ? 'text-amber-700' : 'text-sky-700'}> · {tx.pendingError ? 'Chưa gửi được' : 'Đang gửi…'}</span>
+                        )}
                       </div>
                     </div>
                     <div

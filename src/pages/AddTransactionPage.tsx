@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { api, isNetworkError, isOffline } from '../api/client';
-import { enqueueTransaction } from '../utils/offlineQueue';
+import { api } from '../api/client';
+import { enqueueTransaction, requestQueueFlush } from '../utils/offlineQueue';
 import { Category, TransactionType } from '../types';
 import { formatNumberWithDots, parseCurrencyInput, getTodayString } from '../utils/formatters';
 import {
@@ -24,7 +24,16 @@ export const AddTransactionPage: React.FC = () => {
   const frequentFieldsRef = useRef<HTMLDivElement>(null);
   const submitGuardRef = useRef(false);
   const writeScope = api.getTransactionWriteScope(currentUser || undefined);
-  const initialPendingRef = useRef<PendingTransactionWrite | null>(readPendingTransaction(writeScope));
+  const initialPendingRef = useRef<PendingTransactionWrite | null | undefined>(undefined);
+  if (initialPendingRef.current === undefined) {
+    // Lệnh chưa xác nhận từ bản cũ: chuyển vào hàng đợi gửi ngầm thay vì bắt người dùng xử lý.
+    let legacy = readPendingTransaction(writeScope);
+    if (legacy && api.isLiveMode()) {
+      try { enqueueTransaction(legacy); clearPendingTransaction(legacy.scope, legacy.requestId); legacy = null; }
+      catch { /* giữ lại cách xử lý cũ */ }
+    }
+    initialPendingRef.current = legacy;
+  }
   const initialPending = initialPendingRef.current;
 
   const [type, setType] = useState<TransactionType>(initialPending?.payload.type || 'expense');
@@ -41,7 +50,6 @@ export const AddTransactionPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [pendingWrite, setPendingWrite] = useState<PendingTransactionWrite | null>(initialPending);
-  const [offlineNotice, setOfflineNotice] = useState('');
   const [errorMsg, setErrorMsg] = useState<string>(initialPending
     ? 'Có một giao dịch chưa được Google Sheets xác nhận. Lệnh vẫn được giữ trên máy này.'
     : '');
@@ -160,21 +168,18 @@ export const AddTransactionPage: React.FC = () => {
       payload,
       savedAt: Date.now(),
     };
-    setOfflineNotice('');
-
-    // Lưu vào hàng đợi trên máy rồi cho nhập tiếp; app tự gửi khi có mạng.
-    const keepOffline = (reason: string): boolean => {
-      try { enqueueTransaction(pending); } catch { return false; }
-      setAmountStr('');
-      setNote('');
-      setOfflineNotice(`${reason} Đã lưu ${formatNumberWithDots(parsedAmount)}đ trên máy, app sẽ tự gửi lên Google Sheets khi có mạng. Bạn có thể nhập tiếp.`);
-      amountInputRef.current?.focus();
-      return true;
-    };
-
-    if (api.isLiveMode() && isOffline() && keepOffline('Đang không có mạng.')) {
-      submitGuardRef.current = false;
-      return;
+    // Có kết nối Google Sheets: lưu trên máy trước để hiện ngay, rồi gửi ngầm lên Sheets.
+    // Gửi lại cùng requestId không bao giờ tạo giao dịch trùng.
+    if (api.isLiveMode()) {
+      let queued = true;
+      try { enqueueTransaction(pending); } catch { queued = false; }
+      if (queued) {
+        requestQueueFlush();
+        setSuccess(true);
+        setTimeout(() => navigate('/transactions', { state: { queuedDate: date } }), 150);
+        return;
+      }
+      // Không ghi được bộ nhớ máy (hiếm): gửi trực tiếp như cũ ở dưới.
     }
 
     setPendingWrite(pending);
@@ -191,12 +196,6 @@ export const AddTransactionPage: React.FC = () => {
         navigate('/transactions', { state: { savedDate: date } });
       }, 400);
     } catch (err) {
-      // Lỗi đường truyền: chuyển sang hàng đợi (gửi lại cùng mã lệnh nên không bị ghi trùng).
-      if (isNetworkError(err) && keepOffline('Mạng chập chờn, chưa gửi được.')) {
-        clearPendingTransaction(pending.scope, pending.requestId);
-        setPendingWrite(null);
-        return;
-      }
       const detail = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
       setErrorMsg(`Chưa xác nhận được giao dịch: ${detail} Lệnh vẫn được giữ trên máy này; hãy bấm “Kiểm tra & đồng bộ lại”.`);
     } finally {
@@ -269,12 +268,6 @@ export const AddTransactionPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-        {offlineNotice && !errorMsg && (
-          <div className="p-3 border rounded-xl text-xs font-medium bg-sky-50 border-sky-200 text-sky-800">
-            {offlineNotice}
-          </div>
-        )}
-
         {/* Error message display */}
         {errorMsg && (
           <div className={`p-3 border rounded-xl text-xs font-medium ${pendingWrite ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>

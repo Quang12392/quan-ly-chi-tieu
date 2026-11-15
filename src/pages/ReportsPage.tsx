@@ -1,10 +1,13 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { PageSnapshot, DASHBOARD_REVISION_KEY, isPreviewFresh } from '../utils/dashboardCache';
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../api/client';
+import { api, isNetworkError } from '../api/client';
 import { ReportBundle } from '../types';
 import { formatCurrency, formatCompactCurrency } from '../utils/formatters';
 import { SetBudgetModal } from '../components/budgets/SetBudgetModal';
+import { useAuth } from '../context/AuthContext';
+import { applyPendingToSummary, DATA_SYNCED_EVENT } from '../utils/offlineQueue';
+import { usePendingTransactions } from '../utils/usePendingTransactions';
 import { 
   PieChart, 
   Calendar, 
@@ -36,10 +39,13 @@ export const ReportsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<PageSnapshot<ReportBundle> | null>(() => api.getCachedReport(currentYear,currentMonth));
   const report = snapshot?.data.summary.year === currentYear && snapshot.data.summary.month === currentMonth ? snapshot.data : null;
-  const summary = report?.summary || null;
   const prevSummary = report?.previous || null;
   const budgets = report?.budgets || [];
   const categories = report?.categories || [];
+  const { currentUser } = useAuth();
+  // Cộng ngay giao dịch vừa lưu trên máy (đang gửi ngầm) vào số liệu tháng đang xem.
+  const pendingTxs = usePendingTransactions(api.getTransactionWriteScope(currentUser || undefined), snapshot?.savedAt);
+  const summary = report ? applyPendingToSummary(report.summary, pendingTxs, categories) : null;
   const yearlyTrend = report?.trend || [];
   const yearTotals = report?.years || [];
 
@@ -48,6 +54,7 @@ export const ReportsPage: React.FC = () => {
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
   const [reportError, setReportError] = useState('');
+  const [offlineStale, setOfflineStale] = useState(false);
   const requestVersion = useRef(0);
   const refreshing = useRef(false);
   const loadData = async () => {
@@ -56,11 +63,15 @@ export const ReportsPage: React.FC = () => {
     try {
       setLoading(true);
       setReportError('');
+      setOfflineStale(false);
       const fresh = await api.getReportSnapshot(currentYear,currentMonth);
       if (version !== requestVersion.current) return;
       setSnapshot(fresh);
     } catch (err) {
-      if (version === requestVersion.current) setReportError(err instanceof Error ? err.message : 'Không thể tải báo cáo');
+      if (version !== requestVersion.current) return;
+      // Mất mạng: thanh trạng thái chung đã báo, không hiện thêm hộp lỗi đỏ.
+      if (isNetworkError(err)) setOfflineStale(true);
+      else setReportError(err instanceof Error ? err.message : 'Không thể tải báo cáo');
     } finally {
       if (version === requestVersion.current) { setLoading(false); refreshing.current = false; }
     }
@@ -79,14 +90,17 @@ export const ReportsPage: React.FC = () => {
       if (document.visibilityState === 'visible' && !refreshing.current && !isPreviewFresh(latest?.savedAt)) void loadData();
     };
     const changed = (event: StorageEvent) => { if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); } };
+    const synced = () => { void loadData(); };
     window.addEventListener('online',resume);
     document.addEventListener('visibilitychange',resume);
     window.addEventListener('storage',changed);
+    window.addEventListener(DATA_SYNCED_EVENT,synced);
     return () => {
       requestVersion.current++;
       window.removeEventListener('online',resume);
       document.removeEventListener('visibilitychange',resume);
       window.removeEventListener('storage',changed);
+      window.removeEventListener(DATA_SYNCED_EVENT,synced);
     };
   }, [currentMonth, currentYear]);
 
@@ -186,7 +200,7 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       <div role="status" className="flex items-start justify-between gap-2 text-[11px] text-slate-500">
-        <div><p>{loading ? (report ? 'Đang cập nhật · đang hiển thị bản đã lưu trên máy' : 'Đang lấy báo cáo mới…') : reportError ? 'Chưa cập nhật được báo cáo.' : 'Đã cập nhật báo cáo'}</p>
+        <div><p>{loading ? (report ? 'Đang cập nhật · đang hiển thị bản đã lưu trên máy' : 'Đang lấy báo cáo mới…') : offlineStale ? (report ? 'Chưa có mạng · đang hiển thị báo cáo đã lưu.' : 'Chưa có mạng · tháng này chưa có báo cáo lưu trên máy.') : reportError ? 'Chưa cập nhật được báo cáo.' : 'Đã cập nhật báo cáo'}</p>
           {report && snapshot && <p>Lần cập nhật: {new Intl.DateTimeFormat('vi-VN',{dateStyle:'short',timeStyle:'short',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(snapshot.savedAt)}</p>}
         </div>
         <button disabled={loading} onClick={loadData} className="text-emerald-700 font-semibold shrink-0 disabled:opacity-50">{loading ? 'Đang tải…' : 'Cập nhật'}</button>

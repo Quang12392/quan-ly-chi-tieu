@@ -1,10 +1,13 @@
 import { PageSnapshot, DASHBOARD_REVISION_KEY, isPreviewFresh } from '../utils/dashboardCache';
 import { useLocation } from 'react-router-dom';
 import React, { useEffect, useState, useRef } from 'react';
-import { api } from '../api/client';
+import { api, isNetworkError } from '../api/client';
 import { Transaction, Category, TransactionType, TransactionPage } from '../types';
 import { formatCurrency, formatDate, formatTransactionTime, getMonthRange } from '../utils/formatters';
 import { EditTransactionModal } from '../components/transactions/EditTransactionModal';
+import { useAuth } from '../context/AuthContext';
+import { DATA_SYNCED_EVENT, isPendingTransaction, matchesTransactionQuery, mergePending } from '../utils/offlineQueue';
+import { usePendingTransactions } from '../utils/usePendingTransactions';
 import { 
   Search, 
   Loader2, 
@@ -50,10 +53,15 @@ export const TransactionsPage: React.FC = () => {
     return cached ? {...cached,key:queryKey,fresh:false} : null;
   });
   const view = snapshot?.key === queryKey ? snapshot : null;
-  const transactions = view?.data.page.items || [];
-  const categories = view?.data.categories || [];
+  const { currentUser } = useAuth();
+  const categories = view?.data.categories || api.getCachedCategories() || [];
+  // Giao dịch vừa lưu trên máy (đang gửi ngầm) hiện ngay, trước khi Sheets trả số liệu mới.
+  const pendingTxs = usePendingTransactions(api.getTransactionWriteScope(currentUser || undefined), view?.savedAt)
+    .filter((tx) => matchesTransactionQuery(tx, query, categories));
+  const transactions = mergePending(view?.data.page.items || [], pendingTxs);
   const nextCursor = view?.fresh ? view.data.page.next_cursor : null;
   const [loadError, setLoadError] = useState('');
+  const [offlineStale, setOfflineStale] = useState(false);
   const requestVersion = useRef(0);
   const refreshing = useRef(false);
   const loadData = async (append = false) => {
@@ -62,6 +70,7 @@ export const TransactionsPage: React.FC = () => {
     try {
       setLoading(true);
       setLoadError('');
+      setOfflineStale(false);
       const fresh = await api.getTransactionSnapshot({...query,cursor:append ? nextCursor : null});
       if (version !== requestVersion.current) return;
       setSnapshot(previous => ({...fresh,key:queryKey,fresh:true,data:{...fresh.data,page:{...fresh.data.page,
@@ -69,7 +78,9 @@ export const TransactionsPage: React.FC = () => {
       }}}));
     } catch (err) {
       if (version !== requestVersion.current) return;
-      setLoadError(err instanceof Error ? err.message : 'Không thể tải giao dịch');
+      // Mất mạng: thanh trạng thái chung đã báo, không hiện thêm hộp lỗi đỏ.
+      if (isNetworkError(err)) setOfflineStale(true);
+      else setLoadError(err instanceof Error ? err.message : 'Không thể tải giao dịch');
       // Preserve the visible preview, but never append using its stale cursor.
       setSnapshot(previous => previous ? {...previous,fresh:false} : null);
     } finally {
@@ -95,15 +106,18 @@ export const TransactionsPage: React.FC = () => {
       if (document.visibilityState === 'visible' && !refreshing.current && !isPreviewFresh(latest?.savedAt)) void loadData();
     };
     const changed = (event: StorageEvent) => { if (event.key === DASHBOARD_REVISION_KEY) { setSnapshot(null); void loadData(); } };
+    const synced = () => { void loadData(); };
     window.addEventListener('online',resume);
     document.addEventListener('visibilitychange',resume);
     window.addEventListener('storage',changed);
+    window.addEventListener(DATA_SYNCED_EVENT,synced);
     return () => {
       if (timer !== undefined) window.clearTimeout(timer);
       requestVersion.current++;
       window.removeEventListener('online',resume);
       document.removeEventListener('visibilitychange',resume);
       window.removeEventListener('storage',changed);
+      window.removeEventListener(DATA_SYNCED_EVENT,synced);
     };
   }, [queryKey]);
 
@@ -321,12 +335,12 @@ export const TransactionsPage: React.FC = () => {
 
       {/* Transaction List grouped by date */}
       <div role="status" className="flex items-start justify-between gap-2 text-[11px] text-slate-500">
-        <div><p>{loading ? (view ? 'Đang cập nhật · đang hiển thị dữ liệu đã tải trước đó' : 'Đang lấy giao dịch mới…') : loadError ? 'Chưa cập nhật được danh sách.' : 'Đã cập nhật giao dịch'}</p>
+        <div><p>{loading ? (view ? 'Đang cập nhật · đang hiển thị dữ liệu đã tải trước đó' : 'Đang lấy giao dịch mới…') : offlineStale ? 'Chưa có mạng · đang hiển thị dữ liệu đã lưu.' : loadError ? 'Chưa cập nhật được danh sách.' : 'Đã cập nhật giao dịch'}</p>
           {view && <p>Lần cập nhật: {new Intl.DateTimeFormat('vi-VN',{dateStyle:'short',timeStyle:'short',hourCycle:'h23',timeZone:'Asia/Ho_Chi_Minh'}).format(view.savedAt)}</p>}
         </div>
         <button disabled={loading} onClick={() => loadData()} className="text-emerald-700 font-semibold shrink-0 disabled:opacity-50">{loading ? 'Đang tải…' : 'Cập nhật'}</button>
       </div>
-      {loading && !view ? (
+      {loading && !view && !pendingTxs.length ? (
         <div className="py-12 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="w-8 h-8 animate-spin mb-2 text-emerald-600" />
           <p className="text-sm">Đang tải danh sách giao dịch...</p>
@@ -366,12 +380,13 @@ export const TransactionsPage: React.FC = () => {
                   {dayTxs.map((tx) => {
                     const cat = getCategory(tx.category_id);
                     const time = formatTransactionTime(tx.created_at);
+                    const pending = isPendingTransaction(tx);
                     return (
                       <div
                         key={tx.id}
-                        onClick={() => setEditingTx(tx)}
-                        className="p-3.5 flex items-center justify-between hover:bg-slate-50/80 transition cursor-pointer active:bg-slate-100"
-                        title="Bấm để xem và sửa giao dịch"
+                        onClick={() => { if (!pending) setEditingTx(tx); }}
+                        className={`p-3.5 flex items-center justify-between transition ${pending ? 'bg-sky-50/40' : 'hover:bg-slate-50/80 cursor-pointer active:bg-slate-100'}`}
+                        title={pending ? 'Đang gửi lên Google Sheets; sửa được sau khi gửi xong' : 'Bấm để xem và sửa giao dịch'}
                       >
                         <div className="flex items-center gap-3">
                           <div
@@ -404,9 +419,14 @@ export const TransactionsPage: React.FC = () => {
                                 {tx.member_id === 'husband' ? 'Chồng' : 'Vợ'}
                               </span>
                             </div>
-                            {time && (
+                            {(time || pending) && (
                               <div className="text-[11px] text-slate-400 mt-0.5" title="Giờ tạo giao dịch (giờ Việt Nam)">
                                 {time}
+                                {pending && (
+                                  <span className={tx.pendingError ? 'text-amber-700' : 'text-sky-700'}>
+                                    {time ? ' · ' : ''}{tx.pendingError ? 'Chưa gửi được' : 'Đang gửi…'}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
