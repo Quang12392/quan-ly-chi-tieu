@@ -32,7 +32,11 @@ const STORAGE_KEYS = {
   SETTINGS: 'fam_exp_settings',
   API_URL: 'fam_exp_api_url',
   CATEGORY_PREVIEW: 'fam_exp_category_preview_v1',
+  AUTH_TOKEN: 'family_auth_token',
 };
+
+/** Phát ra khi máy chủ từ chối phiên (hết hạn / PIN đã đổi) để AuthContext đăng xuất. */
+export const AUTH_EXPIRED_EVENT = 'fam-auth-expired';
 
 // Apps Script may legally spend up to 30 seconds waiting for its server-side lock.
 // Keep the browser timeout above that window so it does not abandon a request
@@ -133,6 +137,46 @@ class ApiClient {
     return !!this.getApiUrl();
   }
 
+  public getConfiguredApiUrl(): string {
+    return this.getApiUrl();
+  }
+
+  // --- AUTH: PIN chỉ được kiểm tra trên Apps Script; máy chỉ giữ mã phiên đã ký ---
+  public hasAuthToken(): boolean {
+    try { return !!localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN); } catch { return false; }
+  }
+
+  public clearAuthToken(): void {
+    try { localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN); } catch { /* nothing to clear */ }
+  }
+
+  private saveAuthToken(token: unknown): void {
+    if (typeof token !== 'string' || !token) throw new Error('Máy chủ không trả về phiên đăng nhập hợp lệ.');
+    localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+  }
+
+  private authActionError(error: unknown): Error {
+    const message = error instanceof Error ? error.message : 'Không thể kết nối đến Google Sheets';
+    return new Error(message.startsWith('INVALID_ACTION:')
+      ? 'Apps Script chưa được cập nhật bản bảo mật mới. Hãy dán lại Code_AllInOne.gs và triển khai phiên bản mới (xem README mục 7).'
+      : message);
+  }
+
+  public async login(pin: string, memberId: 'husband' | 'wife'): Promise<void> {
+    this.invalidate();
+    try {
+      const data = await this.requestGAS<{ token: string }>('login', { pin, member_id: memberId });
+      this.saveAuthToken(data?.token);
+    } catch (error) { throw this.authActionError(error); }
+  }
+
+  public async changePin(oldPin: string, newPin: string): Promise<void> {
+    try {
+      const data = await this.requestGAS<{ token: string }>('changePin', { old_pin: oldPin, new_pin: newPin });
+      this.saveAuthToken(data?.token);
+    } catch (error) { throw this.authActionError(error); }
+  }
+
   // --- LOCAL STORAGE HELPERS FOR MOCK / OFFLINE MODE ---
   private getLocal<T>(key: string, fallback: T): T {
     try {
@@ -191,7 +235,7 @@ class ApiClient {
           headers: {
             'Content-Type': 'text/plain;charset=utf-8',
           },
-          body: JSON.stringify({ action, payload }),
+          body: JSON.stringify({ action, payload, token: localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) || undefined }),
         });
 
         if (!response.ok) {
@@ -199,6 +243,14 @@ class ApiClient {
         }
 
         const res = await response.json();
+        const code = String(res?.error?.code || '');
+        if (!res.ok && code.startsWith('AUTH_')) {
+          if (code === 'AUTH_REQUIRED') {
+            this.clearAuthToken();
+            if (typeof window !== 'undefined') window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+          }
+          throw new Error(res.error?.message || 'Cần đăng nhập lại.');
+        }
         if (!res.ok) {
           throw new Error(`${res.error?.code || 'SERVER_ERROR'}: ${res.error?.message || 'Có lỗi xảy ra khi xử lý dữ liệu'}`);
         }

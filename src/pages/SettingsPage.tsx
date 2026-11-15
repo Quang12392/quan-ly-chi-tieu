@@ -176,9 +176,10 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleChangePinSubmit = (e: React.FormEvent) => {
+  const handleChangePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = changePin(oldPin, newPin);
+    setPinResult(null);
+    const res = await changePin(oldPin, newPin);
     setPinResult(res);
     if (res.success) {
       setOldPin('');
@@ -368,7 +369,7 @@ export const SettingsPage: React.FC = () => {
             <Lock className="w-5 h-5 text-emerald-600" />
             <div>
               <h3 className="font-bold text-slate-800 text-sm">Bảo mật & Mã PIN</h3>
-              <p className="text-[11px] text-slate-400">Khóa truy cập cho thiết bị gia đình</p>
+              <p className="text-[11px] text-slate-400">PIN được kiểm tra trên Google Apps Script</p>
             </div>
           </div>
           <button
@@ -406,7 +407,7 @@ export const SettingsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-600">Mã PIN mới (tối thiểu 4 số)</label>
+              <label className="text-[11px] font-semibold text-slate-600">Mã PIN mới (tối thiểu 6 số)</label>
               <input
                 type="password"
                 inputMode="numeric"

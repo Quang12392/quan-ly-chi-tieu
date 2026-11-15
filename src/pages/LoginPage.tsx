@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Lock, Heart, ShieldCheck, ArrowRight } from 'lucide-react';
+import { api } from '../api/client';
+import { Lock, Heart, ShieldCheck, ArrowRight, Database } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -10,21 +11,29 @@ export const LoginPage: React.FC = () => {
   const [selectedMember, setSelectedMember] = useState<'husband' | 'wife'>('husband');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [gasUrl, setGasUrl] = useState(() => api.getConfiguredApiUrl());
+  const [editingUrl, setEditingUrl] = useState(() => !api.getConfiguredApiUrl());
+  const live = !!gasUrl.trim();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!pin) {
+    if (live && !pin) {
       setError('Vui lòng nhập mã PIN bảo mật gia đình');
       return;
     }
 
-    const success = login(pin, selectedMember);
-    if (success) {
+    if (gasUrl.trim() !== api.getConfiguredApiUrl()) api.setApiUrl(gasUrl.trim());
+    setSubmitting(true);
+    const result = await login(pin, selectedMember);
+    setSubmitting(false);
+    if (result.success) {
       navigate('/');
     } else {
-      setError('Mã PIN bảo mật không chính xác. Vui lòng thử lại.');
+      setPin('');
+      setError(result.message);
     }
   };
 
@@ -89,8 +98,39 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Google Apps Script URL: cần có ở đây vì PIN được kiểm tra trên máy chủ */}
+          {editingUrl ? (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-600">
+                URL Google Apps Script
+              </label>
+              <input
+                type="url"
+                value={gasUrl}
+                onChange={(e) => setGasUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+              />
+              {!live && (
+                <p className="text-[11px] text-slate-400">
+                  Để trống để dùng thử với dữ liệu mẫu trên máy này (không cần PIN).
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <Database className="w-3.5 h-3.5 text-emerald-600" />
+                Đã kết nối Google Sheets
+              </span>
+              <button type="button" onClick={() => setEditingUrl(true)} className="font-semibold text-emerald-700">
+                Đổi URL
+              </button>
+            </div>
+          )}
+
           {/* Family PIN input */}
-          <div className="space-y-1.5">
+          {live && <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-600">
               Mã PIN gia đình
             </label>
@@ -105,14 +145,15 @@ export const LoginPage: React.FC = () => {
               />
               <Lock className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             </div>
-          </div>
+          </div>}
 
           {/* Submit */}
           <button
             type="submit"
-            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition active:scale-[0.99]"
+            disabled={submitting}
+            className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-2xl shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition active:scale-[0.99]"
           >
-            <span>Đăng nhập</span>
+            <span>{submitting ? 'Đang kiểm tra...' : live ? 'Đăng nhập' : 'Dùng thử'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>

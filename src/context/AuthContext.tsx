@@ -1,59 +1,79 @@
 import { clearDashboardCache } from '../utils/dashboardCache';
+import { api, AUTH_EXPIRED_EVENT } from '../api/client';
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+type MemberId = 'husband' | 'wife';
+type AuthResult = { success: boolean; message: string };
+
 interface AuthContextType {
-  currentUser: 'husband' | 'wife' | null;
+  currentUser: MemberId | null;
   isAuthenticated: boolean;
-  login: (pin: string, member: 'husband' | 'wife') => boolean;
+  login: (pin: string, member: MemberId) => Promise<AuthResult>;
   logout: () => void;
-  changePin: (oldPin: string, newPin: string) => { success: boolean; message: string };
+  changePin: (oldPin: string, newPin: string) => Promise<AuthResult>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = 'family_auth_session';
-const PIN_STORAGE_KEY = 'family_access_pin';
-const DEFAULT_PIN = '192394'; // Family master PIN
+// Bản cũ lưu PIN dạng rõ trên máy; chỉ còn dùng để dọn đi.
+const LEGACY_PIN_STORAGE_KEY = 'family_access_pin';
+
+function readStoredMember(): MemberId | null {
+  const member = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (member !== 'husband' && member !== 'wife') return null;
+  // Khi đã kết nối Google Sheets, phải có phiên do máy chủ cấp (sau khi kiểm tra PIN).
+  if (api.isLiveMode() && !api.hasAuthToken()) return null;
+  return member;
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<'husband' | 'wife' | null>(() => {
-    return (localStorage.getItem(AUTH_STORAGE_KEY) as 'husband' | 'wife') || null;
-  });
+  const [currentUser, setCurrentUser] = useState<MemberId | null>(readStoredMember);
 
   useEffect(() => {
-    const existingPin = localStorage.getItem(PIN_STORAGE_KEY);
-    // Tự động nâng cấp mã PIN mặc định cũ (123456) lên mã PIN mới của gia đình
-    if (!existingPin || existingPin === '123456') {
-      localStorage.setItem(PIN_STORAGE_KEY, DEFAULT_PIN);
-    }
+    localStorage.removeItem(LEGACY_PIN_STORAGE_KEY);
+    const expired = () => {
+      clearDashboardCache();
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      setCurrentUser(null);
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, expired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expired);
   }, []);
 
-  const login = (pin: string, member: 'husband' | 'wife'): boolean => {
-    const savedPin = localStorage.getItem(PIN_STORAGE_KEY) || DEFAULT_PIN;
-    if (pin === savedPin) {
-      setCurrentUser(member);
+  const login = async (pin: string, member: MemberId): Promise<AuthResult> => {
+    try {
+      // Chế độ dùng thử (chưa có URL) chỉ có dữ liệu mẫu trên máy nên không cần PIN.
+      if (api.isLiveMode()) await api.login(pin, member);
+      clearDashboardCache();
       localStorage.setItem(AUTH_STORAGE_KEY, member);
-      return true;
+      setCurrentUser(member);
+      return { success: true, message: '' };
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Không thể đăng nhập' };
     }
-    return false;
   };
 
   const logout = () => {
     clearDashboardCache();
+    api.clearAuthToken();
     setCurrentUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
   };
 
-  const changePin = (oldPin: string, newPin: string): { success: boolean; message: string } => {
-    const currentPin = localStorage.getItem(PIN_STORAGE_KEY) || DEFAULT_PIN;
-    if (oldPin !== currentPin) {
-      return { success: false, message: 'Mã PIN hiện tại không chính xác' };
+  const changePin = async (oldPin: string, newPin: string): Promise<AuthResult> => {
+    if (!api.isLiveMode()) {
+      return { success: false, message: 'Chế độ dùng thử trên máy không có mã PIN. Hãy kết nối Google Sheets trước.' };
     }
-    if (!newPin || newPin.length < 4) {
-      return { success: false, message: 'Mã PIN mới phải có ít nhất 4 ký tự' };
+    if (!newPin || newPin.length < 6) {
+      return { success: false, message: 'Mã PIN mới phải có ít nhất 6 ký tự' };
     }
-    localStorage.setItem(PIN_STORAGE_KEY, newPin);
-    return { success: true, message: 'Đã đổi mã PIN gia đình thành công!' };
+    try {
+      await api.changePin(oldPin, newPin);
+      return { success: true, message: 'Đã đổi mã PIN. Máy còn lại cần đăng nhập lại bằng mã PIN mới.' };
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'Không thể đổi mã PIN' };
+    }
   };
 
   return (

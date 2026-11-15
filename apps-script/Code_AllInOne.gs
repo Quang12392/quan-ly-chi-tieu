@@ -26,6 +26,11 @@ function doPost(e) {
 
     const action = requestData.action;
     const payload = requestData.payload || {};
+    if (action === 'login' || action === 'changePin') {
+      return successResponse(handleAuthAction_(action, payload, requestData.token));
+    }
+    // Mọi hành động đọc/ghi dữ liệu đều phải có phiên đăng nhập hợp lệ do máy chủ cấp.
+    authVerifyToken_(requestData.token);
     const optimized = dispatchStorageApi(action, payload);
     if (optimized !== null) return successResponse(optimized);
 
@@ -71,8 +76,141 @@ function doPost(e) {
     }
   } catch (error) {
     Logger.log('Error in doPost: ' + error.toString());
-    return errorResponse(error.message || 'Lỗi xử lý yêu cầu máy chủ', 'SERVER_ERROR');
+    return errorResponse(error.message || 'Lỗi xử lý yêu cầu máy chủ', error.authCode || 'SERVER_ERROR');
   }
+}
+
+// ============================================================================
+// PHẦN 1B: XÁC THỰC BẰNG MÃ PIN (kiểm tra trên máy chủ, không nằm trong mã nguồn)
+// ----------------------------------------------------------------------------
+// Đặt / đổi / quên PIN: Apps Script → Project Settings → Script properties →
+// thêm thuộc tính FAMILY_PIN = <mã PIN mới, ít nhất 6 ký tự>. Ở lần gọi kế tiếp,
+// máy chủ băm PIN, lưu bản băm và XÓA FAMILY_PIN; mọi máy phải đăng nhập lại.
+// ============================================================================
+const AUTH_MEMBERS = ['husband', 'wife'];
+const AUTH_TOKEN_DAYS = 180;
+const AUTH_MAX_FAILS = 5;
+const AUTH_LOCK_MINUTES = 15;
+
+function authError_(code, message) {
+  const error = new Error(message);
+  error.authCode = code;
+  return error;
+}
+
+function authHash_(salt, pin) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + ':' + pin));
+}
+
+function authSign_(data, secret) {
+  return Utilities.base64Encode(Utilities.computeHmacSha256Signature(data, secret));
+}
+
+function authSafeEqual_(a, b) {
+  a = String(a); b = String(b);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
+function authValidPin_(pin) {
+  return typeof pin === 'string' && pin.length >= 6 && pin.length <= 64;
+}
+
+// Lưu bản băm của PIN mới và đổi khóa ký phiên => mọi phiên cũ hết hiệu lực.
+function authSetPin_(pin) {
+  if (!authValidPin_(pin)) throw authError_('AUTH_BAD_REQUEST', 'Mã PIN phải có từ 6 đến 64 ký tự.');
+  const props = PropertiesService.getScriptProperties();
+  const salt = Utilities.getUuid().replace(/-/g, '');
+  props.setProperty('auth_pin_salt', salt);
+  props.setProperty('auth_pin_hash', authHash_(salt, pin));
+  props.setProperty('auth_secret', Utilities.getUuid() + Utilities.getUuid());
+  props.deleteProperty('auth_fail');
+}
+
+function authConfig_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('FAMILY_PIN')) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const plain = String(props.getProperty('FAMILY_PIN') || '').trim();
+      if (plain) {
+        if (!authValidPin_(plain)) throw authError_('AUTH_NOT_CONFIGURED', 'FAMILY_PIN trong Script properties phải có ít nhất 6 ký tự.');
+        authSetPin_(plain);
+        props.deleteProperty('FAMILY_PIN');
+      }
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  const config = {
+    salt: props.getProperty('auth_pin_salt'),
+    hash: props.getProperty('auth_pin_hash'),
+    secret: props.getProperty('auth_secret')
+  };
+  if (!config.salt || !config.hash || !config.secret) {
+    throw authError_('AUTH_NOT_CONFIGURED', 'Máy chủ chưa có mã PIN. Vào Apps Script → Project Settings → Script properties, thêm FAMILY_PIN.');
+  }
+  return config;
+}
+
+function authFailState_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('auth_fail') || '{}'); }
+  catch (_) { return {}; }
+}
+
+function authVerifyPin_(pin) {
+  const config = authConfig_();
+  const props = PropertiesService.getScriptProperties();
+  const state = authFailState_(), now = Date.now();
+  if (state.until && state.until > now) {
+    throw authError_('AUTH_LOCKED', 'Nhập sai PIN quá nhiều lần. Vui lòng thử lại sau ' + Math.ceil((state.until - now) / 60000) + ' phút.');
+  }
+  if (!authSafeEqual_(authHash_(config.salt, String(pin || '')), config.hash)) {
+    const windowMs = AUTH_LOCK_MINUTES * 60000;
+    const count = (state.first && now - state.first < windowMs ? state.count || 0 : 0) + 1;
+    const next = count >= AUTH_MAX_FAILS ? { until: now + windowMs } : { count: count, first: count === 1 ? now : state.first };
+    props.setProperty('auth_fail', JSON.stringify(next));
+    throw authError_('AUTH_BAD_PIN', count >= AUTH_MAX_FAILS
+      ? 'Nhập sai PIN ' + AUTH_MAX_FAILS + ' lần. Đăng nhập bị khóa ' + AUTH_LOCK_MINUTES + ' phút.'
+      : 'Mã PIN không chính xác. Còn ' + (AUTH_MAX_FAILS - count) + ' lần thử.');
+  }
+  if (props.getProperty('auth_fail')) props.deleteProperty('auth_fail');
+  return config;
+}
+
+function authIssueToken_(member, secret) {
+  const body = 'v1.' + member + '.' + Date.now();
+  return body + '.' + authSign_(body, secret);
+}
+
+// Trả về member_id của phiên, hoặc ném AUTH_REQUIRED.
+function authVerifyToken_(token) {
+  const parts = String(token || '').split('.');
+  const expired = authError_('AUTH_REQUIRED', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại bằng mã PIN.');
+  if (parts.length !== 4 || parts[0] !== 'v1' || AUTH_MEMBERS.indexOf(parts[1]) < 0) throw expired;
+  const config = authConfig_();
+  const issued = Number(parts[2]), now = Date.now();
+  if (!Number.isFinite(issued) || issued > now + 300000 || now - issued > AUTH_TOKEN_DAYS * 86400000) throw expired;
+  if (!authSafeEqual_(authSign_(parts.slice(0, 3).join('.'), config.secret), parts[3])) throw expired;
+  return parts[1];
+}
+
+function handleAuthAction_(action, payload, token) {
+  if (action === 'login') {
+    const member = String(payload.member_id || '');
+    if (AUTH_MEMBERS.indexOf(member) < 0) throw authError_('AUTH_BAD_REQUEST', 'Thành viên không hợp lệ.');
+    const config = authVerifyPin_(payload.pin);
+    return { token: authIssueToken_(member, config.secret), member_id: member };
+  }
+  // changePin: cần phiên hợp lệ + PIN hiện tại; đổi xong mọi máy khác phải đăng nhập lại.
+  const member = authVerifyToken_(token);
+  const newPin = String(payload.new_pin || '');
+  if (!authValidPin_(newPin)) throw authError_('AUTH_BAD_REQUEST', 'Mã PIN mới phải có từ 6 đến 64 ký tự.');
+  authVerifyPin_(payload.old_pin);
+  authSetPin_(newPin);
+  return { token: authIssueToken_(member, PropertiesService.getScriptProperties().getProperty('auth_secret')), member_id: member };
 }
 
 // ============================================================================

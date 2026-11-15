@@ -11,7 +11,7 @@
 | :--- | :--- |
 | **Website Online (24/7)** | [https://quang12392.github.io/quan-ly-chi-tieu/](https://quang12392.github.io/quan-ly-chi-tieu/) |
 | **GitHub Repository** | [https://github.com/Quang12392/quan-ly-chi-tieu](https://github.com/Quang12392/quan-ly-chi-tieu) |
-| **Mã PIN bảo mật gia đình** | **`192394`** *(chỉ thành viên biết mã này mới được truy cập)* |
+| **Mã PIN bảo mật gia đình** | Lưu dạng băm trong *Script properties* của Apps Script — **không ghi trong mã nguồn hay tài liệu** (xem mục 4.4) |
 | **Người dùng hệ thống** | Đúng **2 người**: `Chồng` (`husband`) và `Vợ` (`wife`) |
 | **Chi phí vận hành** | **0 đồng / tháng** trọn đời (Serverless + Google Cloud) |
 | **Cơ sở dữ liệu** | Google Sheets riêng tư (kết nối qua Google Apps Script Web App) |
@@ -187,11 +187,15 @@ Mỗi lệnh thêm giao dịch từ ứng dụng còn có `request_id` riêng. G
 - **Cảnh báo (Màu vàng cam):** Đã tiêu từ $80\%$ đến $99\%$ hạn mức.
 - **Vượt định mức (Màu đỏ hồng):** Đã tiêu $\ge 100\%$ hạn mức.
 
-### 4.4 Cơ chế bảo mật bằng mã PIN gia đình
-- Mã PIN mặc định được lưu cố định trong mã nguồn là **`192394`**.
-- Mọi thiết bị mới khi mở web bắt buộc phải gõ đúng mã PIN này mới vào được giao diện chính.
-- Mã PIN được lưu an toàn trong `localStorage` với key `family_access_pin`.
-- Tuyệt đối không hiển thị bất kỳ dòng chữ gợi ý mật khẩu nào ra ngoài màn hình đăng nhập.
+### 4.4 Cơ chế bảo mật bằng mã PIN gia đình (từ v2.3.0)
+- **Không bao giờ ghi mã PIN vào mã nguồn, README hay commit.** Repo đang công khai trên GitHub.
+- PIN được **kiểm tra trên Google Apps Script**. Máy chủ chỉ lưu bản băm SHA-256 kèm salt (`auth_pin_hash`, `auth_pin_salt`) trong *Script properties*.
+- Đăng nhập đúng PIN → máy chủ cấp **mã phiên đã ký HMAC** (hạn 180 ngày), lưu trên máy ở `localStorage` key `family_auth_token`. Mọi yêu cầu đọc/ghi dữ liệu phải kèm mã phiên này; thiếu hoặc sai thì máy chủ trả `AUTH_REQUIRED` và app quay về màn hình đăng nhập. Vì vậy người khác có biết URL Apps Script cũng không đọc được dữ liệu nếu không có PIN.
+- Nhập sai PIN 5 lần trong 15 phút → khóa đăng nhập 15 phút (áp dụng chung cho máy chủ).
+- **Đặt PIN lần đầu / quên PIN:** Apps Script → ⚙️ **Project Settings** → **Script properties** → **Add script property**: tên `FAMILY_PIN`, giá trị là PIN mới (ít nhất 6 ký tự) → **Save**. Ở lần đăng nhập kế tiếp máy chủ băm PIN và tự xóa `FAMILY_PIN`. Mọi máy phải đăng nhập lại.
+- **Đổi PIN trong app:** Cài đặt → Bảo mật & Mã PIN. Máy đang dùng giữ phiên, máy còn lại phải đăng nhập bằng PIN mới.
+- Chế độ dùng thử (để trống URL Apps Script) chỉ có dữ liệu mẫu trên máy nên không cần PIN.
+- Màn hình đăng nhập có ô URL Apps Script (vì PIN được kiểm tra trên máy chủ). Không hiển thị gợi ý mật khẩu.
 
 ---
 
@@ -227,7 +231,7 @@ G:\Quản lý chi tiêu gia đình/
 │   │   ├── layout/             # Header.tsx, BottomNav.tsx, AppLayout.tsx
 │   │   └── transactions/       # EditTransactionModal.tsx (Sửa giao dịch)
 │   ├── context/
-│   │   └── AuthContext.tsx      # Quản lý phiên đăng nhập, PIN (192394), chọn Chồng/Vợ
+│   │   └── AuthContext.tsx      # Phiên đăng nhập (mã phiên từ Apps Script), chọn Chồng/Vợ
 │   ├── pages/
 │   │   ├── DashboardPage.tsx   # Trang 1: Tổng quan số dư, tiến độ ngân sách, Top chi tiêu
 │   │   ├── TransactionsPage.tsx# Trang 2: Danh sách giao dịch, bộ lọc đa chiều
@@ -294,6 +298,7 @@ Nếu bạn có điều chỉnh logic backend hoặc muốn triển khai lại t
 3. Mở Google Sheets của bạn > **Tiện ích mở rộng (Extensions)** > **Apps Script**.
 4. Chọn file `Code.gs`, xóa nội dung cũ và dán toàn bộ mã mới vào > Nhấn biểu tượng 💾 **Lưu (Save)**.
 5. Nếu là lần đầu: Chọn hàm **`setupDatabase`** và bấm **Chạy (Run)** để tạo 6 Sheet.
+5b. Nếu máy chủ chưa có PIN (lần đầu hoặc nâng cấp lên v2.3.0): thêm Script property `FAMILY_PIN` như mục 4.4.
 6. Cập nhật bản Web App:
    - Bấm nút xanh **Triển khai (Deploy)** > **Quản lý bản triển khai (Manage deployments)**.
    - Bấm biểu tượng **Cây bút chì (Chỉnh sửa)**.
@@ -448,3 +453,9 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 ### Bỏ nhãn thừa trên form Thêm giao dịch (v2.2.7)
 
 - Bỏ dòng **Thông tin mặc định** để mục Người thực hiện nằm ngay sau Ghi chú và form gọn hơn.
+
+### Kiểm tra mã PIN trên máy chủ (v2.3.0)
+
+- Bỏ PIN viết cứng trong `AuthContext.tsx` và README; xóa PIN dạng rõ cũ khỏi `localStorage` (`family_access_pin`).
+- Apps Script kiểm tra PIN, cấp mã phiên ký HMAC và từ chối mọi yêu cầu dữ liệu không có phiên hợp lệ; khóa 15 phút sau 5 lần sai.
+- **Nâng cấp:** (1) dán `Code_AllInOne.gs` mới, thêm Script property `FAMILY_PIN` = PIN **mới** (PIN cũ đã lộ trong lịch sử Git công khai, không dùng lại), triển khai *Phiên bản mới*; (2) đẩy frontend lên GitHub; (3) đăng nhập lại trên cả hai điện thoại.
