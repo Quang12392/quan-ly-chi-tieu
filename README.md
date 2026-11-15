@@ -190,7 +190,7 @@ Mỗi lệnh thêm giao dịch từ ứng dụng còn có `request_id` riêng. G
 ### 4.4 Cơ chế bảo mật bằng mã PIN gia đình (từ v2.3.0)
 - **Không bao giờ ghi mã PIN vào mã nguồn, README hay commit.** Repo đang công khai trên GitHub.
 - PIN được **kiểm tra trên Google Apps Script**. Máy chủ chỉ lưu bản băm SHA-256 kèm salt (`auth_pin_hash`, `auth_pin_salt`) trong *Script properties*.
-- Đăng nhập đúng PIN → máy chủ cấp **mã phiên đã ký HMAC** (hạn 180 ngày), lưu trên máy ở `localStorage` key `family_auth_token`. Mọi yêu cầu đọc/ghi dữ liệu phải kèm mã phiên này; thiếu hoặc sai thì máy chủ trả `AUTH_REQUIRED` và app quay về màn hình đăng nhập. Vì vậy người khác có biết URL Apps Script cũng không đọc được dữ liệu nếu không có PIN.
+- Đăng nhập đúng PIN → máy chủ cấp **mã phiên đã ký HMAC** (hạn 3650 ngày ≈ 10 năm, chỉnh ở `AUTH_TOKEN_DAYS`), lưu trên máy ở `localStorage` key `family_auth_token`. Mọi yêu cầu đọc/ghi dữ liệu phải kèm mã phiên này; thiếu hoặc sai thì máy chủ trả `AUTH_REQUIRED` và app quay về màn hình đăng nhập. Vì vậy người khác có biết URL Apps Script cũng không đọc được dữ liệu nếu không có PIN.
 - Nhập sai PIN 5 lần trong 15 phút → khóa đăng nhập 15 phút (áp dụng chung cho máy chủ).
 - **Đặt PIN lần đầu / quên PIN:** Apps Script → ⚙️ **Project Settings** → **Script properties** → **Add script property**: tên `FAMILY_PIN`, giá trị là PIN mới (ít nhất 6 ký tự) → **Save**. Ở lần đăng nhập kế tiếp máy chủ băm PIN và tự xóa `FAMILY_PIN`. Mọi máy phải đăng nhập lại.
 - **Đổi PIN trong app:** Cài đặt → Bảo mật & Mã PIN. Máy đang dùng giữ phiên, máy còn lại phải đăng nhập bằng PIN mới.

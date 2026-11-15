@@ -88,7 +88,7 @@ function doPost(e) {
 // máy chủ băm PIN, lưu bản băm và XÓA FAMILY_PIN; mọi máy phải đăng nhập lại.
 // ============================================================================
 const AUTH_MEMBERS = ['husband', 'wife'];
-const AUTH_TOKEN_DAYS = 180;
+const AUTH_TOKEN_DAYS = 3650;
 const AUTH_MAX_FAILS = 5;
 const AUTH_LOCK_MINUTES = 15;
 
