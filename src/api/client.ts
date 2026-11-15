@@ -38,6 +38,21 @@ const STORAGE_KEYS = {
 /** Phát ra khi máy chủ từ chối phiên (hết hạn / PIN đã đổi) để AuthContext đăng xuất. */
 export const AUTH_EXPIRED_EVENT = 'fam-auth-expired';
 
+export const OFFLINE_MESSAGE = 'Không có mạng. Đang hiển thị dữ liệu đã lưu trên máy.';
+
+/** Lỗi đường truyền: yêu cầu chưa chắc đã tới máy chủ, có thể gửi lại an toàn (ghi có mã lệnh). */
+export class NetworkError extends Error {
+  readonly retryable = true;
+}
+
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof NetworkError || (!!error && (error as { retryable?: unknown }).retryable === true);
+}
+
+export function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 // Apps Script may legally spend up to 30 seconds waiting for its server-side lock.
 // Keep the browser timeout above that window so it does not abandon a request
 // which is still queued and then start another overlapping server execution.
@@ -227,6 +242,7 @@ class ApiClient {
     const execute = async (): Promise<T> => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), write ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS);
+      let answered = false;
       try {
         // Use text/plain to avoid CORS preflight OPTIONS check in Google Apps Script
         const response = await fetch(url, {
@@ -243,6 +259,7 @@ class ApiClient {
         }
 
         const res = await response.json();
+        answered = true;
         const code = String(res?.error?.code || '');
         if (!res.ok && code.startsWith('AUTH_')) {
           if (code === 'AUTH_REQUIRED') {
@@ -257,9 +274,14 @@ class ApiClient {
 
         return res.data as T;
       } catch (err: unknown) {
-        if (controller.signal.aborted) throw new Error(write
-          ? 'Chưa xác nhận được kết quả lưu. Hãy kiểm tra Lịch sử giao dịch trước khi thử lưu lại.'
-          : 'Google Sheets chưa phản hồi sau 60 giây. Vui lòng đợi vài giây rồi cập nhật lại.');
+        // Máy chủ chưa trả lời (mất mạng, hết giờ, lỗi HTTP): lỗi đường truyền, có thể thử lại.
+        if (!answered) {
+          if (isOffline()) throw new NetworkError(OFFLINE_MESSAGE);
+          if (controller.signal.aborted) throw new NetworkError(write
+            ? 'Chưa xác nhận được kết quả lưu sau 60 giây.'
+            : 'Google Sheets chưa phản hồi sau 60 giây. Vui lòng đợi vài giây rồi cập nhật lại.');
+          throw new NetworkError(err instanceof Error && !(err instanceof TypeError) ? err.message : 'Không kết nối được Google Sheets. Kiểm tra lại mạng.');
+        }
         const msg = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
         throw new Error(msg);
       } finally {

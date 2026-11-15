@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
+import { OfflineStatus } from './OfflineStatus';
 
 export const AppLayout: React.FC = () => {
   const location = useLocation();
@@ -31,7 +32,8 @@ export const AppLayout: React.FC = () => {
       {/* Container constrained to max-w-lg for mobile-first app experience */}
       <div className="w-full max-w-lg bg-slate-50 min-h-screen flex flex-col border-x border-slate-200/80 shadow-md relative pb-20">
         <Header title={title} subtitle={subtitle} />
-        
+        <OfflineStatus />
+
         <main className="flex-1 p-4 overflow-y-auto">
           <Outlet />
         </main>

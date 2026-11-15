@@ -220,7 +220,7 @@ G:\Quản lý chi tiêu gia đình/
 │   ├── icon-512.png            # Icon 3D splash screen Android (512x512)
 │   ├── favicon.png             # Favicon tab trình duyệt
 │   ├── manifest.json           # Khai báo Web App PWA Manifest (có cache buster ?v=2)
-│   └── sw.js                   # Service Worker v2 (quản lý bộ nhớ đệm và kích hoạt offline)
+│   └── sw.js                   # Service Worker v3: lưu giao diện để mở app khi mất mạng
 ├── src/                        # Mã nguồn ứng dụng React + TypeScript
 │   ├── api/
 │   │   ├── client.ts           # ApiClient kết nối Google Apps Script & LocalStorage
@@ -459,3 +459,11 @@ Chạy `npm run test:storage` và `npm run build`. Bộ kiểm thử dùng mô p
 - Bỏ PIN viết cứng trong `AuthContext.tsx` và README; xóa PIN dạng rõ cũ khỏi `localStorage` (`family_access_pin`).
 - Apps Script kiểm tra PIN, cấp mã phiên ký HMAC và từ chối mọi yêu cầu dữ liệu không có phiên hợp lệ; khóa 15 phút sau 5 lần sai.
 - **Nâng cấp:** (1) dán `Code_AllInOne.gs` mới, thêm Script property `FAMILY_PIN` = PIN **mới** (PIN cũ đã lộ trong lịch sử Git công khai, không dùng lại), triển khai *Phiên bản mới*; (2) đẩy frontend lên GitHub; (3) đăng nhập lại trên cả hai điện thoại.
+
+### Dùng app khi mất mạng (v2.4.0)
+
+- **Mở app khi không có mạng:** `public/sw.js` (cache `fam-exp-pwa-v3`) lưu `index.html`, đúng các file JS/CSS mà nó dùng và icon. Trang chính ưu tiên lấy từ mạng để luôn có bản mới; mất mạng thì dùng bản đã lưu. File build cũ được tự dọn. Không cache yêu cầu tới Google Apps Script. Tìm trong cache dùng `ignoreVary` vì máy chủ có thể gửi `Vary: Origin`.
+- **Xem số liệu:** các trang hiển thị bản đã lưu trên máy (Tổng quan, Lịch sử, Báo cáo, danh mục) kèm thông báo đang offline. Tháng chưa từng mở khi có mạng thì chưa có dữ liệu để xem.
+- **Nhập giao dịch:** mất mạng hoặc mạng chập chờn → giao dịch vào hàng đợi `fam_exp_offline_queue_v1` (riêng theo URL + thành viên), form trống lại để nhập tiếp. Khi có mạng / mở lại app, `OfflineStatus` gửi lần lượt bằng `syncTransaction` cùng `request_id` nên không bị ghi trùng. Lỗi do máy chủ từ chối thì dừng lại, hiện lỗi và cho bỏ giao dịch đó.
+- Giao dịch đang chờ gửi chưa xuất hiện trong Tổng quan / Lịch sử cho tới khi gửi xong.
+- Điện thoại cần mở app **một lần khi có mạng** sau khi cập nhật để lưu giao diện mới.

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../api/client';
+import { api, isNetworkError, isOffline } from '../api/client';
+import { enqueueTransaction } from '../utils/offlineQueue';
 import { Category, TransactionType } from '../types';
 import { formatNumberWithDots, parseCurrencyInput, getTodayString } from '../utils/formatters';
 import {
@@ -40,6 +41,7 @@ export const AddTransactionPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [pendingWrite, setPendingWrite] = useState<PendingTransactionWrite | null>(initialPending);
+  const [offlineNotice, setOfflineNotice] = useState('');
   const [errorMsg, setErrorMsg] = useState<string>(initialPending
     ? 'Có một giao dịch chưa được Google Sheets xác nhận. Lệnh vẫn được giữ trên máy này.'
     : '');
@@ -158,6 +160,23 @@ export const AddTransactionPage: React.FC = () => {
       payload,
       savedAt: Date.now(),
     };
+    setOfflineNotice('');
+
+    // Lưu vào hàng đợi trên máy rồi cho nhập tiếp; app tự gửi khi có mạng.
+    const keepOffline = (reason: string): boolean => {
+      try { enqueueTransaction(pending); } catch { return false; }
+      setAmountStr('');
+      setNote('');
+      setOfflineNotice(`${reason} Đã lưu ${formatNumberWithDots(parsedAmount)}đ trên máy, app sẽ tự gửi lên Google Sheets khi có mạng. Bạn có thể nhập tiếp.`);
+      amountInputRef.current?.focus();
+      return true;
+    };
+
+    if (api.isLiveMode() && isOffline() && keepOffline('Đang không có mạng.')) {
+      submitGuardRef.current = false;
+      return;
+    }
+
     setPendingWrite(pending);
     savePendingTransaction(pending);
 
@@ -172,6 +191,12 @@ export const AddTransactionPage: React.FC = () => {
         navigate('/transactions', { state: { savedDate: date } });
       }, 400);
     } catch (err) {
+      // Lỗi đường truyền: chuyển sang hàng đợi (gửi lại cùng mã lệnh nên không bị ghi trùng).
+      if (isNetworkError(err) && keepOffline('Mạng chập chờn, chưa gửi được.')) {
+        clearPendingTransaction(pending.scope, pending.requestId);
+        setPendingWrite(null);
+        return;
+      }
       const detail = err instanceof Error ? err.message : 'Không thể kết nối đến Google Sheets';
       setErrorMsg(`Chưa xác nhận được giao dịch: ${detail} Lệnh vẫn được giữ trên máy này; hãy bấm “Kiểm tra & đồng bộ lại”.`);
     } finally {
@@ -244,6 +269,12 @@ export const AddTransactionPage: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+        {offlineNotice && !errorMsg && (
+          <div className="p-3 border rounded-xl text-xs font-medium bg-sky-50 border-sky-200 text-sky-800">
+            {offlineNotice}
+          </div>
+        )}
+
         {/* Error message display */}
         {errorMsg && (
           <div className={`p-3 border rounded-xl text-xs font-medium ${pendingWrite ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>

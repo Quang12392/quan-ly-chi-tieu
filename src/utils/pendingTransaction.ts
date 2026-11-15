@@ -27,7 +27,7 @@ export function createTransactionRequestId(): string {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
 }
 
-function validPendingWrite(value: unknown): value is PendingTransactionWrite {
+export function validPendingWrite(value: unknown): value is PendingTransactionWrite {
   if (!value || typeof value !== 'object') return false;
   const pending = value as Partial<PendingTransactionWrite>;
   const payload = pending.payload as Partial<PendingTransactionPayload> | undefined;
